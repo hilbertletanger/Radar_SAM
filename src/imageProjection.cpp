@@ -92,8 +92,8 @@ public:
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
         //这里的回调函数应该要改//TODO:
 
-        pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("lio_sam/deskew/cloud_deskewed", 1);
-        pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/deskew/cloud_info", 1);
+        pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("lio_sam/deskew/cloud_deskewed", 1); //提取的点云，往外发，我们可能不需要这个
+        pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/deskew/cloud_info", 1);   //点云数据的发送
 
         allocateMemory();
         resetParameters();
@@ -192,29 +192,29 @@ public:
     bool cachePointCloud(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
     {
         // cache point cloud
-        cloudQueue.push_back(*laserCloudMsg);
+        cloudQueue.push_back(*laserCloudMsg); //放进点云队列
         if (cloudQueue.size() <= 2)
             return false;
 
-        // convert cloud
-        currentCloudMsg = std::move(cloudQueue.front());
-        cloudQueue.pop_front();
-        // if (sensor == SensorType::VELODYNE)
-        pcl::moveFromROSMsg(currentCloudMsg, *laserCloudIn);
+        // convert cloud  //点云covert
+        currentCloudMsg = std::move(cloudQueue.front()); //拿到当前点云
+        cloudQueue.pop_front();  //队列里pop一个
+        pcl::moveFromROSMsg(currentCloudMsg, *laserCloudIn); //转成ros消息 laserCloudIn
         
 
-        // get timestamp
+        // get timestamp 获取时间
         cloudHeader = currentCloudMsg.header;
         timeScanCur = cloudHeader.stamp.toSec();
         // timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
-        timeScanEnd = timeScanCur;
+        timeScanEnd = timeScanCur +0.2; //这里我的想法是，让timeScanEnd等于下一帧的时间，现在获取这个可能会出错，所以暂时加入magic number
+        //让timeScanEnd = timeScanCur+（两帧时间差）
 
-        // check dense flag
-        if (laserCloudIn->is_dense == false)
-        {
-            ROS_ERROR("Point cloud is not in dense format, please remove NaN points first!");
-            ros::shutdown();
-        }
+        // check dense flag  //查看是否dense 我们肯定不做这个
+        // if (laserCloudIn->is_dense == false)
+        // {
+        //     ROS_ERROR("Point cloud is not in dense format, please remove NaN points first!");
+        //     ros::shutdown();
+        // }
 
         // check ring channel
         // static int ringFlag = 0;
@@ -260,7 +260,17 @@ public:
         std::lock_guard<std::mutex> lock1(imuLock);
         std::lock_guard<std::mutex> lock2(odoLock);
 
-        // make sure IMU data available for the scan
+        // make sure IMU data available for the scan 确认IMU可用，原来的逻辑是：
+        //  if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd) //TODO:
+        // {
+        //     ROS_DEBUG("Waiting for IMU data ...");
+        //     return false;
+        // }
+        // imu不能为空，imu队列里最前的一个的时间不能大于当前点云时间 imu队列最后一个的时间不能小于当前点云时间（end）
+        //也即 在时间先后上有 ： imuFront  ->  timecur -> timeend  -> imuBack
+        //在我们雷达的情况下，我们定义这样的时间：
+        //imuFront ->timecur ->timeNextFrame ->imuback
+        //所以修改如下  （其实是对timeScanEnd的修改）
         if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd) //TODO:
         {
             ROS_DEBUG("Waiting for IMU data ...");
@@ -281,7 +291,7 @@ public:
         while (!imuQueue.empty())
         {
             if (imuQueue.front().header.stamp.toSec() < timeScanCur - 0.01)
-                imuQueue.pop_front();
+                imuQueue.pop_front();//如果imu队列里的front时间比timeScanCur提前太多，就pop掉，直到接近
             else
                 break;
         }
@@ -291,18 +301,20 @@ public:
 
         imuPointerCur = 0;
 
-        for (int i = 0; i < (int)imuQueue.size(); ++i)
+        for (int i = 0; i < (int)imuQueue.size(); ++i)//遍历imu队列
         {
             sensor_msgs::Imu thisImuMsg = imuQueue[i];
             double currentImuTime = thisImuMsg.header.stamp.toSec();
 
             // get roll, pitch, and yaw estimation for this scan
-            if (currentImuTime <= timeScanCur)
+            if (currentImuTime <= timeScanCur) //在imu队列里，现在应该只有第一项在timeScanCur前了吧？所以应该只做一次
                 imuRPY2rosRPY(&thisImuMsg, &cloudInfo.imuRollInit, &cloudInfo.imuPitchInit, &cloudInfo.imuYawInit);
+                //反正是获得了当前帧的rpy估计，存在cloudInfo里
 
             if (currentImuTime > timeScanEnd + 0.01)
                 break;
 
+            //在imu队列第一帧，初始化imuRot为0
             if (imuPointerCur == 0){
                 imuRotX[0] = 0;
                 imuRotY[0] = 0;
@@ -312,11 +324,11 @@ public:
                 continue;
             }
 
-            // get angular velocity
+            // get angular velocity在这之后的帧，首先得到角速度
             double angular_x, angular_y, angular_z;
             imuAngular2rosAngular(&thisImuMsg, &angular_x, &angular_y, &angular_z);
 
-            // integrate rotation
+            // integrate rotation然后实际上做了个积分
             double timeDiff = currentImuTime - imuTime[imuPointerCur-1];
             imuRotX[imuPointerCur] = imuRotX[imuPointerCur-1] + angular_x * timeDiff;
             imuRotY[imuPointerCur] = imuRotY[imuPointerCur-1] + angular_y * timeDiff;
@@ -324,7 +336,7 @@ public:
             imuTime[imuPointerCur] = currentImuTime;
             ++imuPointerCur;
         }
-
+        //最终，imuRot成为了在这帧期间imu返回的角度变化，注意，每帧初始都设置成0，所以这是个相对值
         --imuPointerCur;
 
         if (imuPointerCur <= 0)
@@ -354,6 +366,7 @@ public:
         // get start odometry at the beinning of the scan
         nav_msgs::Odometry startOdomMsg;
 
+        //遍历odo队列
         for (int i = 0; i < (int)odomQueue.size(); ++i)
         {
             startOdomMsg = odomQueue[i];
@@ -362,14 +375,17 @@ public:
                 continue;
             else
                 break;
-        }
+        }//最终是找到odomMsg时间正好比timeScancur大的地方
 
+        //转成tf
         tf::Quaternion orientation;
         tf::quaternionMsgToTF(startOdomMsg.pose.pose.orientation, orientation);
 
+        //获得此时rpy
         double roll, pitch, yaw;
         tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
 
+        //这就是我们在mapOptimization里的初始猜测，所以我们知道，这个猜测是来源于odom
         // Initial guess used in mapOptimization
         cloudInfo.initialGuessX = startOdomMsg.pose.pose.position.x;
         cloudInfo.initialGuessY = startOdomMsg.pose.pose.position.y;
@@ -380,6 +396,7 @@ public:
 
         cloudInfo.odomAvailable = true;
 
+        //这里想拿到当前帧结束时的odom，对radar没有意义，我们先来看看它用这个来做什么
         // get end odometry at the end of the scan
         odomDeskewFlag = false;
 
