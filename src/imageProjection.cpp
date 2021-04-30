@@ -400,11 +400,13 @@ public:
         // get end odometry at the end of the scan
         odomDeskewFlag = false;
 
+        //如果odom的最后一项时间都比ScanEnd小，那就没必要找了
         if (odomQueue.back().header.stamp.toSec() < timeScanEnd)
             return;
 
         nav_msgs::Odometry endOdomMsg;
 
+        //遍历
         for (int i = 0; i < (int)odomQueue.size(); ++i)
         {
             endOdomMsg = odomQueue[i];
@@ -415,17 +417,23 @@ public:
                 break;
         }
 
+        //如果位姿的不确定性不一样，就return，不理解这是用来做什么的
         if (int(round(startOdomMsg.pose.covariance[0])) != int(round(endOdomMsg.pose.covariance[0])))
             return;
 
+        //transBegin
         Eigen::Affine3f transBegin = pcl::getTransformation(startOdomMsg.pose.pose.position.x, startOdomMsg.pose.pose.position.y, startOdomMsg.pose.pose.position.z, roll, pitch, yaw);
 
         tf::quaternionMsgToTF(endOdomMsg.pose.pose.orientation, orientation);
         tf::Matrix3x3(orientation).getRPY(roll, pitch, yaw);
+
+        //transEnd
         Eigen::Affine3f transEnd = pcl::getTransformation(endOdomMsg.pose.pose.position.x, endOdomMsg.pose.pose.position.y, endOdomMsg.pose.pose.position.z, roll, pitch, yaw);
 
+        //得到相对变换
         Eigen::Affine3f transBt = transBegin.inverse() * transEnd;
 
+        //从中拿到rpy和欧拉角，但实际上没有用? 我猜测可能本来是想加一条odom的factor，但最后没加 TODO:
         float rollIncre, pitchIncre, yawIncre;
         pcl::getTranslationAndEulerAngles(transBt, odomIncreX, odomIncreY, odomIncreZ, rollIncre, pitchIncre, yawIncre);
 
@@ -508,84 +516,115 @@ public:
     }
 
     void projectPointCloud() //这里有两个选择，一个是根本就不做投影之后就用点云 但可能架构改很大 一个是强行为毫米波雷达作投影 计算time和ring//TODO:
+    //现在，我们选择不做投影，因为匹配不在这里，所以我们基本什么都不做，我们保留之前试图投影radar时的代码
+    //我们看到，原来的架构里，这里主要输出两个东西，一个是rangemap，一个是fullCloud，我们保留fullCloud
     {
         int cloudSize = laserCloudIn->points.size();
-        // range image projection
+        int index =0;
         for (int i = 0; i < cloudSize; ++i)
         {
             PointType thisPoint;
             thisPoint.x = laserCloudIn->points[i].x;
             thisPoint.y = laserCloudIn->points[i].y;
             thisPoint.z = laserCloudIn->points[i].z;
-            // thisPoint.intensity = laserCloudIn->points[i].intensity;
-
-            float range = pointDistance(thisPoint);
-            if (range < lidarMinRange || range > lidarMaxRange)
-                continue;
-
-            // int rowIdn = laserCloudIn->points[i].ring;
-            float verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
-
-            // rowIdn计算   出该点激光雷达是竖直方向上第几线的
-            // 从下往上计数，-15度记为初始线，第0线，一共16线(N_SCAN=16)
-            float ang_bottom = 30; //TODO: 设置毫米波的投影参数
-            float ang_res_y = 5;
-            int rowIdn = (verticalAngle + ang_bottom) / ang_res_y;
-
-            if (rowIdn < 0 || rowIdn >= N_SCAN)
-                continue;
-
-            if (rowIdn % downsampleRate != 0)
-                continue;
-
-            float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
-
-            static float ang_res_x = 360.0/float(Horizon_SCAN);
-            int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
-            if (columnIdn >= Horizon_SCAN)
-                columnIdn -= Horizon_SCAN;
-
-            if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
-                continue;
-
-            if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
-                continue;
-
-            // thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);//这里使用time来去畸变 实际上radar不需要
-
-            rangeMat.at<float>(rowIdn, columnIdn) = range;
-
-            int index = columnIdn + rowIdn * Horizon_SCAN;
+            // int index = columnIdn + rowIdn * Horizon_SCAN;
+            //原版的index如上，我们直接++好了，但可能需要调试TODO:
             fullCloud->points[index] = thisPoint;
+            index++;
         }
+        //下面是试图radar投影的代码
+        // int cloudSize = laserCloudIn->points.size();
+        // // range image projection
+        // for (int i = 0; i < cloudSize; ++i)
+        // {
+        //     PointType thisPoint;
+        //     thisPoint.x = laserCloudIn->points[i].x;
+        //     thisPoint.y = laserCloudIn->points[i].y;
+        //     thisPoint.z = laserCloudIn->points[i].z;
+        //     // thisPoint.intensity = laserCloudIn->points[i].intensity;
+
+        //     float range = pointDistance(thisPoint);
+        //     if (range < lidarMinRange || range > lidarMaxRange)
+        //         continue;
+
+        //     // int rowIdn = laserCloudIn->points[i].ring;
+        //     float verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
+
+        //     // rowIdn计算   出该点激光雷达是竖直方向上第几线的
+        //     // 从下往上计数，-15度记为初始线，第0线，一共16线(N_SCAN=16)
+        //     float ang_bottom = 30; //TODO: 设置毫米波的投影参数
+        //     float ang_res_y = 5;
+        //     int rowIdn = (verticalAngle + ang_bottom) / ang_res_y;
+
+        //     if (rowIdn < 0 || rowIdn >= N_SCAN)
+        //         continue;
+
+        //     if (rowIdn % downsampleRate != 0)
+        //         continue;
+
+        //     float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
+
+        //     static float ang_res_x = 360.0/float(Horizon_SCAN);
+        //     int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
+        //     if (columnIdn >= Horizon_SCAN)
+        //         columnIdn -= Horizon_SCAN;
+
+        //     if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
+        //         continue;
+
+        //     if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
+        //         continue;
+
+        //     // thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);//这里使用time来去畸变 实际上radar不需要
+
+        //     rangeMat.at<float>(rowIdn, columnIdn) = range;
+
+        //     int index = columnIdn + rowIdn * Horizon_SCAN;
+        //     fullCloud->points[index] = thisPoint;
+        // }
     }
 
+    //本来是，把rangeMap存在Cloudinfo里，以及得到extractedCloud变量
+    //而且似乎，所谓extractedCloud其实就是把当前帧所有点给push_back
+    //补充一个知识，pcl::pointCLoud内部是用vector的形式存储points，而且其的push_bach方法实际是往points里push_back
+    //我们这里只保留extractedCloud，之后看看这个东西怎么用
     void cloudExtraction()
     {
         int count = 0;
+        int cloudSize = laserCloudIn->points.size();
         // extract segmented cloud for lidar odometry
-        for (int i = 0; i < N_SCAN; ++i)
+        for (int i = 0; i < cloudSize; ++i)
         {
-            cloudInfo.startRingIndex[i] = count - 1 + 5;
-
-            for (int j = 0; j < Horizon_SCAN; ++j)
-            {
-                if (rangeMat.at<float>(i,j) != FLT_MAX)
-                {
-                    // mark the points' column index for marking occlusion later
-                    cloudInfo.pointColInd[count] = j;
-                    // save range info
-                    cloudInfo.pointRange[count] = rangeMat.at<float>(i,j);
-                    // save extracted cloud
-                    extractedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
-                    // size of extracted cloud
-                    ++count;
-                }
-            }
-            cloudInfo.endRingIndex[i] = count -1 - 5;
+            // save extracted cloud
+            extractedCloud->push_back(fullCloud->points[i]);
+            // size of extracted cloud
+            ++count;
         }
+        // int count = 0;
+        // // extract segmented cloud for lidar odometry
+        // for (int i = 0; i < N_SCAN; ++i)
+        // {
+        //     cloudInfo.startRingIndex[i] = count - 1 + 5;
+
+        //     for (int j = 0; j < Horizon_SCAN; ++j)
+        //     {
+        //         if (rangeMat.at<float>(i,j) != FLT_MAX)
+        //         {
+        //             // mark the points' column index for marking occlusion later
+        //             cloudInfo.pointColInd[count] = j;
+        //             // save range info
+        //             cloudInfo.pointRange[count] = rangeMat.at<float>(i,j);
+        //             // save extracted cloud
+        //             extractedCloud->push_back(fullCloud->points[j + i*Horizon_SCAN]);
+        //             // size of extracted cloud
+        //             ++count;
+        //         }
+        //     }
+        //     cloudInfo.endRingIndex[i] = count -1 - 5;
+        // }
     }
     
+    //发布cloudinfo
     void publishClouds()
     {
         cloudInfo.header = cloudHeader;

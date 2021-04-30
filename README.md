@@ -9,4 +9,5 @@ timeScanEnd = timeScanCur +0.2
 
 所谓的cloudinfo 其实里面包含了一帧的点云信息和点云本身（包括提取的角特征和面特征，以及rangeMap）
 
+rollIncre, pitchIncre, yawIncre 本来可能想加odom的factor，但最后没加
 
