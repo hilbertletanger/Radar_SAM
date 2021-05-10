@@ -586,7 +586,7 @@ public:
 
     //本来是，把rangeMap存在Cloudinfo里，以及得到extractedCloud变量
     //而且似乎，所谓extractedCloud其实就是把当前帧所有点给push_back
-    //补充一个知识，pcl::pointCLoud内部是用vector的形式存储points，而且其的push_bach方法实际是往points里push_back
+    //补充一个知识，pcl::pointCLoud内部是用vector的形式存储points，而且其的push_bach方法(做了重载)实际是往points里push_back
     //我们这里只保留extractedCloud，之后看看这个东西怎么用
     void cloudExtraction()
     {
@@ -628,7 +628,7 @@ public:
     void publishClouds()
     {
         cloudInfo.header = cloudHeader;
-        cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame);
+        cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame); 
         pubLaserCloudInfo.publish(cloudInfo);
     }
 };

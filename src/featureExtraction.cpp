@@ -6,6 +6,7 @@ struct smoothness_t{
     size_t ind;
 };
 
+// 重载括号为比较
 struct by_value{ 
     bool operator()(smoothness_t const &left, smoothness_t const &right) { 
         return left.value < right.value;
@@ -27,11 +28,14 @@ public:
     pcl::PointCloud<PointType>::Ptr cornerCloud;
     pcl::PointCloud<PointType>::Ptr surfaceCloud;
 
+    //设置一个下采样的体素滤波 我们不需要
     pcl::VoxelGrid<PointType> downSizeFilter;
 
     lio_sam::cloud_info cloudInfo;
     std_msgs::Header cloudHeader;
 
+
+    //用来存每个点的曲率
     std::vector<smoothness_t> cloudSmoothness;
     float *cloudCurvature;
     int *cloudNeighborPicked;
@@ -39,8 +43,10 @@ public:
 
     FeatureExtraction()
     {
+        //订阅imageProjection出来的cloud info
         subLaserCloudInfo = nh.subscribe<lio_sam::cloud_info>("lio_sam/deskew/cloud_info", 1, &FeatureExtraction::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
+        //做完之后再发布cloude info 和两种点云
         pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/feature/cloud_info", 1);
         pubCornerPoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_corner", 1);
         pubSurfacePoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_surface", 1);
@@ -78,6 +84,7 @@ public:
         publishFeatureCloud();
     }
 
+    //计算曲率，我们不计算
     void calculateSmoothness()
     {
         int cloudSize = extractedCloud->points.size();
@@ -100,6 +107,7 @@ public:
         }
     }
 
+    //标记遮挡点 我们不标记
     void markOccludedPoints()
     {
         int cloudSize = extractedCloud->points.size();
@@ -138,6 +146,7 @@ public:
         }
     }
 
+    //分别提取特征 我们不提取
     void extractFeatures()
     {
         cornerCloud->clear();
@@ -237,6 +246,7 @@ public:
         }
     }
 
+    //清空
     void freeCloudInfoMemory()
     {
         cloudInfo.startRingIndex.clear();
@@ -245,6 +255,8 @@ public:
         cloudInfo.pointRange.clear();
     }
 
+    //发布，我们看到，最后是发布两种点云，我们先看看这两种点云最后是怎么匹配的，直觉上我们其实没有这一步的任何操作，但可能后期可以在这里
+    //把毫米波雷达的点云也区分成两种，具体是那两种之后再想 TODO:
     void publishFeatureCloud()
     {
         // free cloud info memory
