@@ -355,6 +355,27 @@ public:
         return cloudOut;
     }
 
+    pcl::PointCloud<PointType>::Ptr transformPointClouduseTransformTobeMapped(pcl::PointCloud<PointType>::Ptr cloudIn)
+    {
+        updatePointAssociateToMap();
+
+        pcl::PointCloud<PointType>::Ptr cloudOut(new pcl::PointCloud<PointType>());
+
+        int cloudSize = cloudIn->size();
+        cloudOut->resize(cloudSize);
+
+        #pragma omp parallel for num_threads(numberOfCores)
+        for (int i = 0; i < cloudSize; i++)
+        {
+            PointType pointOri, pointSel;
+            pointOri = cloudIn->points[i];
+            //将每个点转到地图系，也即绝对坐标
+            pointAssociateToMap(&pointOri, &pointSel);
+            cloudOut->points[i] = pointSel;
+        }
+        return cloudOut;
+    }
+
     gtsam::Pose3 pclPointTogtsamPose3(PointTypePose thisPoint)
     {
         return gtsam::Pose3(gtsam::Rot3::RzRyRx(double(thisPoint.roll), double(thisPoint.pitch), double(thisPoint.yaw)),
@@ -1399,29 +1420,29 @@ public:
         // if (laserCloudCornerLastDSNum > edgeFeatureMinValidNum && laserCloudSurfLastDSNum > surfFeatureMinValidNum)
         if (laserCloudAllLastDSNum > 100) // 原来是 线特征多于10个 平面特征多于100个 我们的话 直接大于100吧
         {
-            kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
-            kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
-            kdtreeAllFromMap->setInputCloud(laserCloudAllFromMapDS);
+            // kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
+            // kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
+            // kdtreeAllFromMap->setInputCloud(laserCloudAllFromMapDS);
 
-            //迭代30次，应该是在这里改成迭代最近点
-            for (int iterCount = 0; iterCount < 30; iterCount++)
-            {
-                laserCloudOri->clear();
-                coeffSel->clear();
+            // //迭代30次，应该是在这里改成迭代最近点
+            // for (int iterCount = 0; iterCount < 30; iterCount++)
+            // {
+            //     laserCloudOri->clear();
+            //     coeffSel->clear();
 
-                //大概讲一下这两个怎么做的，首先对当前帧corner特征的每一个点，使用transformTobeMapped的值给转到地图系，也就是绝对坐标了
-                //然后在kdtreeCornerFromMap，也即局部地图中找最近的5个点，用来构建残差，比如先计算5个点的均值和协方差，然后构建点线距离，具体看loam
-                cornerOptimization();
-                surfOptimization();
+            //     //大概讲一下这两个怎么做的，首先对当前帧corner特征的每一个点，使用transformTobeMapped的值给转到地图系，也就是绝对坐标了
+            //     //然后在kdtreeCornerFromMap，也即局部地图中找最近的5个点，用来构建残差，比如先计算5个点的均值和协方差，然后构建点线距离，具体看loam
+            //     cornerOptimization();
+            //     surfOptimization();
 
-                combineOptimizationCoeffs();
-                //最后LM去优化
-                if (LMOptimization(iterCount) == true)
-                    break;              
-                // LM优化结果 都存在transformTobeMapped之中
-                //每次迭代，都是transformTobeMapped[0] += matX.at<float>(0, 0);
-                //注意到，transformTobeMapped实际就是我们一开始用于把当前帧特征变换到世界坐标系的那个变换
-            }
+            //     combineOptimizationCoeffs();
+            //     //最后LM去优化
+            //     if (LMOptimization(iterCount) == true)
+            //         break;              
+            //     // LM优化结果 都存在transformTobeMapped之中
+            //     //每次迭代，都是transformTobeMapped[0] += matX.at<float>(0, 0);
+            //     //注意到，transformTobeMapped实际就是我们一开始用于把当前帧特征变换到世界坐标系的那个变换
+            // }
 
              // extract cloud
              //那么这里，我们直接提取的cure点云就是在当前帧坐标系 也即局部坐标系下的，
@@ -1432,7 +1453,9 @@ public:
              //给变换到地图坐标（可以使用和上面相同的方法），然后icp的结果是在这个变换之上再进行的调整，这样会好很多
             pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
             pcl::copyPointCloud(*laserCloudAllLastDS,    *cureKeyframeCloud);
-            
+
+            //进行到绝对坐标的变换 使用transformTobeMapped
+            cureKeyframeCloud =   transformPointClouduseTransformTobeMapped(cureKeyframeCloud);
 
             pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
             pcl::copyPointCloud(*laserCloudAllFromMap,    *prevKeyframeCloud);
@@ -1440,13 +1463,14 @@ public:
 
             // ICP Settings
             static pcl::IterativeClosestPoint<PointType, PointType> icp;
-            icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius*2);
-            icp.setMaximumIterations(100);
+            icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius*2);//我们这里不是回环检测，所以不需要设置这么大 但是可能需要调试才能知道结果 TODO:
+            icp.setMaximumIterations(20); //for 回环检测为100  在我们匹配步 设置为20吧
             icp.setTransformationEpsilon(1e-6);
             icp.setEuclideanFitnessEpsilon(1e-6);
-            icp.setRANSACIterations(0);
+            icp.setRANSACIterations(0); //可能需要打开ransac
 
             // Align clouds   注意这里到底哪个放在Source 哪个放在Target
+            //看下面发布时的写法，是把cureCloud 用icp结果进行变换 所以应该是对的
             icp.setInputSource(cureKeyframeCloud);
             icp.setInputTarget(prevKeyframeCloud);
             pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
@@ -1456,28 +1480,29 @@ public:
                 return;
 
             // publish corrected cloud
-            if (pubIcpKeyFrames.getNumSubscribers() != 0)
-            {
-                pcl::PointCloud<PointType>::Ptr closed_cloud(new pcl::PointCloud<PointType>());
-                pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
-                publishCloud(&pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
-            }
+            // if (pubIcpKeyFrames.getNumSubscribers() != 0)
+            // {
+            //     pcl::PointCloud<PointType>::Ptr closed_cloud(new pcl::PointCloud<PointType>());
+            //     pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
+            //     publishCloud(&pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
+            // }
 
             // Get pose transformation
             float x, y, z, roll, pitch, yaw;
             Eigen::Affine3f correctionLidarFrame;
+            //这里拿到icp最终的结果
             correctionLidarFrame = icp.getFinalTransformation();
             // transform from world origin to wrong pose
-            Eigen::Affine3f tWrong = pclPointToAffine3f(copy_cloudKeyPoses6D->points[loopKeyCur]);
+            //首先，我们拿到做icp之前的当前帧到世界坐标的变换：
+            Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
             // transform from world origin to corrected pose
-            Eigen::Affine3f tCorrect = correctionLidarFrame * tWrong;// pre-multiplying -> successive rotation about a fixed frame
-            pcl::getTranslationAndEulerAngles (tCorrect, x, y, z, roll, pitch, yaw);
-            gtsam::Pose3 poseFrom = Pose3(Rot3::RzRyRx(roll, pitch, yaw), Point3(x, y, z));
-            gtsam::Pose3 poseTo = pclPointTogtsamPose3(copy_cloudKeyPoses6D->points[loopKeyPre]);
-            gtsam::Vector Vector6(6);
-            float noiseScore = icp.getFitnessScore();
-            Vector6 << noiseScore, noiseScore, noiseScore, noiseScore, noiseScore, noiseScore;
-            noiseModel::Diagonal::shared_ptr constraintNoise = noiseModel::Diagonal::Variances(Vector6);
+            //然后我们获得icp修正之后的结果
+            Eigen::Affine3f tAfter = correctionLidarFrame * tBefore;
+            //从中获得欧拉角和变换等
+            pcl::getTranslationAndEulerAngles (tAfter, x, y, z, roll, pitch, yaw);
+            //然后在变换回trans，用于下面的transformUpdate
+            transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
+            transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
 
             //icp end
 

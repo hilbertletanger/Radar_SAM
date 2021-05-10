@@ -31,3 +31,5 @@ rollIncre, pitchIncre, yawIncre 本来可能想加odom的factor，但最后没�
 
 最终我们提取的局部地图为 laserCloudAllFromMap   然后当前帧是laserCloudAllLastDS
 
+需要调试的参数： setMaxCorrespondenaceDistance
+
