@@ -199,7 +199,7 @@ public:
         nh.param<float>("lio_sam/imuGyrNoise", imuGyrNoise, 0.001);
         nh.param<float>("lio_sam/imuAccBiasN", imuAccBiasN, 0.0002);
         nh.param<float>("lio_sam/imuGyrBiasN", imuGyrBiasN, 0.00003);
-        nh.param<float>("lio_sam/imuGravity", imuGravity, 9.80511);
+        nh.param<float>("lio_sam/imuGravity", imuGravity, 9.7964);
         nh.param<float>("lio_sam/imuRPYWeight", imuRPYWeight, 0.01);
         nh.param<vector<double>>("lio_sam/extrinsicRot", extRotV, vector<double>());
         nh.param<vector<double>>("lio_sam/extrinsicRPY", extRPYV, vector<double>());

@@ -3,27 +3,38 @@
 **前端ICP 后端SAM 正在开发中**
 
 
-注意：
-timeScanEnd = timeScanCur +0.2
-得看单位对不对
+# 留待调试的事项
+timeScanEnd = timeScanCur +0.2得看单位对不对
+setMaxCorrespondenaceDistance参数
+rollIncre, pitchIncre, yawIncre 本来可能想加odom的factor，但最后没加
+
+# 关键变量理解
 
 所谓的cloudinfo 其实里面包含了一帧的点云信息和点云本身（包括提取的角特征和面特征，以及rangeMap）
 
-rollIncre, pitchIncre, yawIncre 本来可能想加odom的factor，但最后没加
+laserCloudAllFromMap为当前帧对应的局部地图（点云），当前帧点云是laserCloudAllLastDS
 
-现在 image Projection基本改完了 注意以下事项：
+cloudKeyPoses3D是一个pointCloud，但里面每个点实际是位姿，cloudKeyPoses3D就是我们维护的位姿队列
+
+
+# 修改后 各模块注意点
+
+image Projection:
 原来ImageProjection中的rangeMat我们现在没有赋值
 我们现在点云保留在extractedCloud内 但还没能理解原来代码里fullCloud和extractedCLoud分别用来做什么
-注意 我们开辟了一个指针教CloudForICP 但现在还没有赋值
+我们开辟了一个指针教CloudForICP 但现在还没有赋值
 还有一点需要注意，这个模块会sub一个odom，但这个odom并不是我们自己录制的odom(实际上我们也本来就没有提供odom)，而是imureintegration模块通过订阅imu消息和lidarOdometry来积分出来的
 最终发布两个消息 一个是Cloudinfo 一个是Cloud_deskewed 其中，Cloudinfo内的cloud_deskewed变量就是Cloud_deskewed消息的值
 
-然后我们进入featureExtration模块，因为这个模块只订阅了刚才的imageProjecttion模块
+
+feature Extration:
+这个模块只订阅了刚才的imageProjecttion模块
 我们看到，最后是发布两种点云，我们先看看这两种点云最后是怎么匹配的，直觉上我们其实没有这一步的任何操作，但可能后期可以在这里点云也区分成两种，具体是那两种之后再想
 最后发布的两种点云也依然是sensor::messages的pointcloud2，所以我们先不动这里，后期可能直接不订阅这里的topic
 
-然后进入mapOptimization模块，这一模块订阅cloud_info和GPS，没有gps的情况下其实就也只订阅cloud_info
-我们不用那角点和平面点，直接用全部的点云，也在cloudinfo里
+mapOptimization:
+这一模块订阅cloud_info和GPS，没有gps的情况下其实就也只订阅cloud_info
+我们不用角点和平面点，直接用全部的点云，也在cloudinfo里
 现在问题在于，PointType这个东西，一方面用于点云的点的表示，一方面用于位姿的表示
 解决方案一：PointType统一位PointXYZI，只不过之后使用的时候，需要把毫米波雷达点云转发成PointXYZI的形式，I域不赋值就好
 方案二：弄两个PointType出来，只不过需要把一些函数给重载
@@ -31,5 +42,11 @@ rollIncre, pitchIncre, yawIncre 本来可能想加odom的factor，但最后没�
 
 最终我们提取的局部地图为 laserCloudAllFromMap   然后当前帧是laserCloudAllLastDS
 
-需要调试的参数： setMaxCorrespondenaceDistance
+imu Preintegration
+从main开始看，先是imu预积分，然后再是做trans融合
+imuGravity得给正确值
+
+现在我们来看 怎么让其运行起来
+
+
 

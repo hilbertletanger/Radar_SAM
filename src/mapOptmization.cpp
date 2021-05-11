@@ -313,6 +313,7 @@ public:
             //优化 就是SAM的部分
             saveKeyFramesAndFactor();
 
+            //如果aLoopIsClosed为true(比如加入了gps因子或者loop因子) 那么不仅得往位姿队列里加新位姿，还得更新整个位姿队列的值
             correctPoses();
 
             publishOdometry();
@@ -1580,11 +1581,17 @@ public:
     {
         if (cloudKeyPoses3D->points.empty())
         {
+            //第一帧时，初始化gtsam参数
             noiseModel::Diagonal::shared_ptr priorNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-2, 1e-2, M_PI*M_PI, 1e8, 1e8, 1e8).finished()); // rad*rad, meter*meter
+            //先验 0是key 第二个参数是先验位姿，最后一个参数是噪声模型，如果没看错的话，先验应该默认初始化成0了
             gtSAMgraph.add(PriorFactor<Pose3>(0, trans2gtsamPose(transformTobeMapped), priorNoise));
+            //添加节点的初始估计值
             initialEstimate.insert(0, trans2gtsamPose(transformTobeMapped));
         }else{
+            //之后是添加二元的因子
             noiseModel::Diagonal::shared_ptr odometryNoise = noiseModel::Diagonal::Variances((Vector(6) << 1e-6, 1e-6, 1e-6, 1e-4, 1e-4, 1e-4).finished());
+            //从这里可以看出，poseFrom不谈，poseTo一定是绝对坐标系下的
+            //添加的Factor值是 poseFrom.between(poseTo)    = poseFrom.inverse * poseTo;
             gtsam::Pose3 poseFrom = pclPointTogtsamPose3(cloudKeyPoses6D->points.back());
             gtsam::Pose3 poseTo   = trans2gtsamPose(transformTobeMapped);
             gtSAMgraph.add(BetweenFactor<Pose3>(cloudKeyPoses3D->size()-1, cloudKeyPoses3D->size(), poseFrom.between(poseTo), odometryNoise));
@@ -1598,6 +1605,7 @@ public:
             return;
 
         // wait for system initialized and settles down
+        //系统初始化且位移一段时间了再考虑要不要加gpsfactor
         if (cloudKeyPoses3D->points.empty())
             return;
         else
@@ -1642,6 +1650,7 @@ public:
                 float gps_z = thisGPS.pose.pose.position.z;
                 if (!useGpsElevation)
                 {
+                    //gps 的z一般不可信
                     gps_z = transformTobeMapped[5];
                     noise_z = 0.01;
                 }
@@ -1694,6 +1703,7 @@ public:
 
     void saveKeyFramesAndFactor()
     {
+        //判断是否经过了一段距离 其实就是提关键帧
         if (saveFrame() == false)
             return;
 
@@ -1726,6 +1736,7 @@ public:
         initialEstimate.clear();
 
         //save key poses
+        //优化完成后，保存3D和6D位姿
         PointType thisPose3D;
         PointTypePose thisPose6D;
         Pose3 latestEstimate;
@@ -1738,7 +1749,8 @@ public:
         thisPose3D.x = latestEstimate.translation().x();
         thisPose3D.y = latestEstimate.translation().y();
         thisPose3D.z = latestEstimate.translation().z();
-        thisPose3D.intensity = cloudKeyPoses3D->size(); // this can be used as index
+        thisPose3D.intensity = cloudKeyPoses3D->size(); // this can be used as index、
+        //这里终于push_back cloudKeyPoses3D
         cloudKeyPoses3D->push_back(thisPose3D);
 
         thisPose6D.x = thisPose3D.x;
@@ -1754,6 +1766,7 @@ public:
         // cout << "****************************************************" << endl;
         // cout << "Pose covariance:" << endl;
         // cout << isam->marginalCovariance(isamCurrentEstimate.size()-1) << endl << endl;
+        //注意，这里就是边缘化
         poseCovariance = isam->marginalCovariance(isamCurrentEstimate.size()-1);
 
         // save updated transform
@@ -1779,7 +1792,7 @@ public:
         allCloudKeyFrames.push_back(thisAllKeyFrame);
 
 
-        // save path for visualization
+        // save path for visualization  只是为了可视化
         updatePath(thisPose6D);
     }
 

@@ -25,6 +25,8 @@ class TransformFusion : public ParamServer
 public:
     std::mutex mtx;
 
+    //两个数据是耦合关系, imu通过激光odom给出优化后的预积分预测
+    // odom根据预测的位姿优化、融合出新的odom   
     ros::Subscriber subImuOdometry;
     ros::Subscriber subLaserOdometry;
 
@@ -209,6 +211,7 @@ public:
 
         pubImuOdometry = nh.advertise<nav_msgs::Odometry> (odomTopic+"_incremental", 2000);
 
+        //下面是预积分使用到的gtsam的一些参数配置
         boost::shared_ptr<gtsam::PreintegrationParams> p = gtsam::PreintegrationParams::MakeSharedU(imuGravity);
         p->accelerometerCovariance  = gtsam::Matrix33::Identity(3,3) * pow(imuAccNoise, 2); // acc white noise in continuous
         p->gyroscopeCovariance      = gtsam::Matrix33::Identity(3,3) * pow(imuGyrNoise, 2); // gyro white noise in continuous
@@ -222,6 +225,7 @@ public:
         correctionNoise2 = gtsam::noiseModel::Diagonal::Sigmas((gtsam::Vector(6) << 1, 1, 1, 1, 1, 1).finished()); // rad,rad,rad,m, m, m
         noiseModelBetweenBias = (gtsam::Vector(6) << imuAccBiasN, imuAccBiasN, imuAccBiasN, imuGyrBiasN, imuGyrBiasN, imuGyrBiasN).finished();
         
+        //// 预积分前后的imu
         imuIntegratorImu_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for IMU message thread
         imuIntegratorOpt_ = new gtsam::PreintegratedImuMeasurements(p, prior_imu_bias); // setting up the IMU integration for optimization        
     }
@@ -247,8 +251,10 @@ public:
         systemInitialized = false;
     }
 
+    //这里是把lidar odo转到imu坐标系计算
     void odometryHandler(const nav_msgs::Odometry::ConstPtr& odomMsg)
     {
+        
         std::lock_guard<std::mutex> lock(mtx);
 
         double currentCorrectionTime = ROS_TIME(odomMsg);
@@ -257,6 +263,8 @@ public:
         if (imuQueOpt.empty())
             return;
 
+
+        // 首先会从odom队列中取最新的pose作为先验，并做好时间对齐
         float p_x = odomMsg->pose.pose.position.x;
         float p_y = odomMsg->pose.pose.position.y;
         float p_z = odomMsg->pose.pose.position.z;
@@ -274,6 +282,8 @@ public:
             resetOptimization();
 
             // pop old IMU message
+            //掉一些比较旧的imu数据, 只需要保证雷达odom时间戳在imu队列中间
+            // 因为imu是高频数据, 这里是有效的
             while (!imuQueOpt.empty())
             {
                 if (ROS_TIME(&imuQueOpt.front()) < currentCorrectionTime - delta_t)
@@ -315,9 +325,10 @@ public:
 
 
         // reset graph for speed
+        //这里的key作为计数器，在key超过100时重置整个因子图  减小计算压力 保存最后的噪声值
         if (key == 100)
         {
-            // get updated noise before reset
+            // get updated noise before reset   重置前把最后噪声保存
             gtsam::noiseModel::Gaussian::shared_ptr updatedPoseNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(X(key-1)));
             gtsam::noiseModel::Gaussian::shared_ptr updatedVelNoise  = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(V(key-1)));
             gtsam::noiseModel::Gaussian::shared_ptr updatedBiasNoise = gtsam::noiseModel::Gaussian::Covariance(optimizer.marginalCovariance(B(key-1)));
@@ -349,11 +360,13 @@ public:
         while (!imuQueOpt.empty())
         {
             // pop and integrate imu data that is between two optimizations
+            //计算imu帧间时间差
             sensor_msgs::Imu *thisImu = &imuQueOpt.front();
             double imuTime = ROS_TIME(thisImu);
             if (imuTime < currentCorrectionTime - delta_t)
             {
                 double dt = (lastImuT_opt < 0) ? (1.0 / 500.0) : (imuTime - lastImuT_opt);
+                //进行预积分得到新的状态值,注意用到的是imu数据的加速度和角速度
                 imuIntegratorOpt_->integrateMeasurement(
                         gtsam::Vector3(thisImu->linear_acceleration.x, thisImu->linear_acceleration.y, thisImu->linear_acceleration.z),
                         gtsam::Vector3(thisImu->angular_velocity.x,    thisImu->angular_velocity.y,    thisImu->angular_velocity.z), dt);
@@ -364,7 +377,7 @@ public:
             else
                 break;
         }
-        // add imu factor to graph
+        // add imu factor to graph//利用两帧之间的IMU数据完成了预积分后增加imu因子到因子图中
         const gtsam::PreintegratedImuMeasurements& preint_imu = dynamic_cast<const gtsam::PreintegratedImuMeasurements&>(*imuIntegratorOpt_);
         gtsam::ImuFactor imu_factor(X(key - 1), V(key - 1), X(key), V(key), B(key - 1), preint_imu);
         graphFactors.add(imu_factor);
@@ -457,23 +470,27 @@ public:
     {
         std::lock_guard<std::mutex> lock(mtx);
 
+        //这里进行imu和lidar的坐标系变换  这里应该只变换旋转
         sensor_msgs::Imu thisImu = imuConverter(*imu_raw);
 
         imuQueOpt.push_back(thisImu);
         imuQueImu.push_back(thisImu);
 
+        //// 检查有没有执行过一次优化,这里需要先在odomhandler中优化一次后再进行该函数后续的工作
         if (doneFirstOpt == false)
             return;
-
+        // 获得时间间隔, 第一次为1/500,之后是两次imuTime间的差
         double imuTime = ROS_TIME(&thisImu);
         double dt = (lastImuT_imu < 0) ? (1.0 / 500.0) : (imuTime - lastImuT_imu);
         lastImuT_imu = imuTime;
 
         // integrate this single imu message
+        //进行预积分
         imuIntegratorImu_->integrateMeasurement(gtsam::Vector3(thisImu.linear_acceleration.x, thisImu.linear_acceleration.y, thisImu.linear_acceleration.z),
                                                 gtsam::Vector3(thisImu.angular_velocity.x,    thisImu.angular_velocity.y,    thisImu.angular_velocity.z), dt);
 
         // predict odometry
+        //根据预积分结果来预测odom
         gtsam::NavState currentState = imuIntegratorImu_->predict(prevStateOdom, prevBiasOdom);
 
         // publish odometry
@@ -482,7 +499,7 @@ public:
         odometry.header.frame_id = odometryFrame;
         odometry.child_frame_id = "odom_imu";
 
-        // transform imu pose to ldiar
+        // transform imu pose to ldiar  这里是变换了平移
         gtsam::Pose3 imuPose = gtsam::Pose3(currentState.quaternion(), currentState.position());
         gtsam::Pose3 lidarPose = imuPose.compose(imu2Lidar);
 
@@ -509,8 +526,10 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "roboat_loam");
     
+    //先是imu预积分
     IMUPreintegration ImuP;
 
+    //然后再订阅两个消息，做融合
     TransformFusion TF;
 
     ROS_INFO("\033[1;32m----> IMU Preintegration Started.\033[0m");
