@@ -108,7 +108,9 @@ public:
         fullCloud.reset(new pcl::PointCloud<PointType>());
         extractedCloud.reset(new pcl::PointCloud<PointType>());
 
-        fullCloud->points.resize(N_SCAN*Horizon_SCAN);
+        // fullCloud->points.resize(N_SCAN*Horizon_SCAN);
+        fullCloud->points.resize(Radar_target_number);
+
 
         cloudInfo.startRingIndex.assign(N_SCAN, 0);
         cloudInfo.endRingIndex.assign(N_SCAN, 0);
@@ -174,6 +176,7 @@ public:
 
     void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg) //TODO:
     {
+        cout<<"[DEBUG]ImageProjection cloudHandler : into" <<endl;
         if (!cachePointCloud(laserCloudMsg))
             return;
 
@@ -181,11 +184,11 @@ public:
             return;
 
         projectPointCloud();
-
+        
         cloudExtraction();
-
+        
         publishClouds();
-
+        
         resetParameters();
     }
 
@@ -204,9 +207,12 @@ public:
 
         // get timestamp 获取时间
         cloudHeader = currentCloudMsg.header;
-        timeScanCur = cloudHeader.stamp.toSec();
+        //手动做时延处理 这非常不合理 只是为了跑通代码
+        // cloudHeader.stamp.sec -=2;
+        timeScanCur = cloudHeader.stamp.toSec(); // TODO:权宜之计
         // timeScanEnd = timeScanCur + laserCloudIn->points.back().time;
-        timeScanEnd = timeScanCur +0.2; //这里我的想法是，让timeScanEnd等于下一帧的时间，现在获取这个可能会出错，所以暂时加入magic number
+        // timeScanEnd = timeScanCur +0.2; //这里我的想法是，让timeScanEnd等于下一帧的时间，现在获取这个可能会出错，所以暂时加入magic number
+        timeScanEnd =timeScanCur;
         //让timeScanEnd = timeScanCur+（两帧时间差）
 
         // check dense flag  //查看是否dense 我们肯定不做这个
@@ -274,9 +280,16 @@ public:
         if (imuQueue.empty() || imuQueue.front().header.stamp.toSec() > timeScanCur || imuQueue.back().header.stamp.toSec() < timeScanEnd) //TODO:
         {
             ROS_DEBUG("Waiting for IMU data ...");
+            ROS_DEBUG_STREAM("imu Queue front time = "<<(int)(imuQueue.front().header.stamp.toSec()));
+            ROS_DEBUG_STREAM("timeScanCur = "<<(int)timeScanCur);
+
+            ROS_DEBUG_STREAM("imu Queue back time = "<<(int)(imuQueue.back().header.stamp.toSec()));
+            ROS_DEBUG_STREAM("timeScanEnd = "<<(int)timeScanEnd);
+
+
+
             return false;
         }
-
         imuDeskewInfo(); //看下面的代码，似乎这里不用改，但好像和timeScanCur 有关系 待定TODO:
 
         odomDeskewInfo();
@@ -636,6 +649,9 @@ public:
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "lio_sam");
+
+    //打开DEBUG调试信息
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
 
     ImageProjection IP;
     

@@ -25,7 +25,7 @@ class TransformFusion : public ParamServer
 public:
     std::mutex mtx;
 
-    //两个数据是耦合关系, imu通过激光odom给出优化后的预积分预测
+    //两个数据是耦合关系, imu通过激光odom给出优化后的预积分预测 这一步在imuOdometryHandler中做 激光odom通过lidarOdometryHandler来引入
     // odom根据预测的位姿优化、融合出新的odom   
     ros::Subscriber subImuOdometry;
     ros::Subscriber subLaserOdometry;
@@ -100,6 +100,8 @@ public:
         // get latest odometry (at current IMU stamp)
         if (lidarOdomTime == -1)
             return;
+        
+        //删去odom队列中 时间比lidarodom早的
         while (!imuOdomQueue.empty())
         {
             if (imuOdomQueue.front().header.stamp.toSec() <= lidarOdomTime)
@@ -107,14 +109,18 @@ public:
             else
                 break;
         }
+        //
         Eigen::Affine3f imuOdomAffineFront = odom2affine(imuOdomQueue.front());
         Eigen::Affine3f imuOdomAffineBack = odom2affine(imuOdomQueue.back());
+        //odom队列前和后的相对变换
         Eigen::Affine3f imuOdomAffineIncre = imuOdomAffineFront.inverse() * imuOdomAffineBack;
+        //相对变换乘以lidarOdom  我们知道 lidarOdom来自于transfromtobe 是个绝对坐标系 所以这里应该是odom队列中最后时刻的位姿绝对坐标系
         Eigen::Affine3f imuOdomAffineLast = lidarOdomAffine * imuOdomAffineIncre;
         float x, y, z, roll, pitch, yaw;
         pcl::getTranslationAndEulerAngles(imuOdomAffineLast, x, y, z, roll, pitch, yaw);
         
         // publish latest odometry
+        //所以我们实际上是 使用lidarodom 来给出优化之后的预积分预测 但是这个消息是发在odometry/imu的 好像没人接?
         nav_msgs::Odometry laserOdometry = imuOdomQueue.back();
         laserOdometry.pose.pose.position.x = x;
         laserOdometry.pose.pose.position.y = y;
@@ -254,6 +260,8 @@ public:
     //这里是把lidar odo转到imu坐标系计算
     void odometryHandler(const nav_msgs::Odometry::ConstPtr& odomMsg)
     {
+        ROS_DEBUG("[imuPreintegration::IMUPreintegration]odometryHandler");
+
         
         std::lock_guard<std::mutex> lock(mtx);
 
@@ -385,6 +393,8 @@ public:
         graphFactors.add(gtsam::BetweenFactor<gtsam::imuBias::ConstantBias>(B(key - 1), B(key), gtsam::imuBias::ConstantBias(),
                          gtsam::noiseModel::Diagonal::Sigmas(sqrt(imuIntegratorOpt_->deltaTij()) * noiseModelBetweenBias)));
         // add pose factor
+        //还加入了pose factor,其实对应于作者论文中的因子图结构
+     //  就是与imu因子一起的 Lidar odometry factor
         gtsam::Pose3 curPose = lidarPose.compose(lidar2Imu);
         gtsam::PriorFactor<gtsam::Pose3> pose_factor(X(key), curPose, degenerate ? correctionNoise2 : correctionNoise);
         graphFactors.add(pose_factor);
@@ -441,6 +451,7 @@ public:
                 lastImuQT = imuTime;
             }
         }
+        ROS_DEBUG("[imuPreintegration::IMUPreintegration]odometryHandler END");
 
         ++key;
         doneFirstOpt = true;
@@ -469,6 +480,7 @@ public:
     void imuHandler(const sensor_msgs::Imu::ConstPtr& imu_raw)
     {
         std::lock_guard<std::mutex> lock(mtx);
+        ROS_DEBUG("[imuPreintegration::IMUPreintegration]imuHandler");
 
         //这里进行imu和lidar的坐标系变换  这里应该只变换旋转
         sensor_msgs::Imu thisImu = imuConverter(*imu_raw);
@@ -518,7 +530,11 @@ public:
         odometry.twist.twist.angular.y = thisImu.angular_velocity.y + prevBiasOdom.gyroscope().y();
         odometry.twist.twist.angular.z = thisImu.angular_velocity.z + prevBiasOdom.gyroscope().z();
         pubImuOdometry.publish(odometry);
+
+        ROS_DEBUG("[imuPreintegration::IMUPreintegration]imuHandlerend");
+
     }
+
 };
 
 
@@ -526,6 +542,7 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "roboat_loam");
     
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
     //先是imu预积分
     IMUPreintegration ImuP;
 

@@ -201,7 +201,8 @@ public:
         pubLaserOdometryIncremental = nh.advertise<nav_msgs::Odometry> ("lio_sam/mapping/odometry_incremental", 1);
         pubPath                     = nh.advertise<nav_msgs::Path>("lio_sam/mapping/path", 1);
 
-        subCloud = nh.subscribe<lio_sam::cloud_info>("lio_sam/feature/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
+        //非常重要的修改，我们直接去接特征提取前的cloud_info
+        subCloud = nh.subscribe<lio_sam::cloud_info>("lio_sam/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS   = nh.subscribe<nav_msgs::Odometry> (gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop  = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
@@ -303,20 +304,43 @@ public:
             //使用imu和odom的信息来设置初始估计，结果都放在transformTobeMapped里
             updateInitialGuess();
 
+            // float transInitSave[6];
+            // int len = sizeof(transformTobeMapped) / sizeof(transformTobeMapped[0]);
+            // memcpy(transInitSave,transformTobeMapped,len*sizeof(float));  
+
             extractSurroundingKeyFrames();
 
             downsampleCurrentScan();
 
             //匹配  这里改成ICP
+            ROS_DEBUG("Before scan2MapOptimization");
+            ROS_DEBUG_STREAM("Before scan2MapOptimization TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+            <<" z = "<<transformTobeMapped[5]);
+
+
             scan2MapOptimization();
 
+            ROS_DEBUG("After scan2MapOptimization");
+            ROS_DEBUG_STREAM("After scan2MapOptimization TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+            <<" z = "<<transformTobeMapped[5]);
+
             //优化 就是SAM的部分
+            ROS_DEBUG("Before saveKeyFramesAndFactor");
+
+            // memcpy(transformTobeMapped,transInitSave,len*sizeof(float));  
+
             saveKeyFramesAndFactor();
 
+            // memcpy(transformTobeMapped,transInitSave,len*sizeof(float));  
+            
             //如果aLoopIsClosed为true(比如加入了gps因子或者loop因子) 那么不仅得往位姿队列里加新位姿，还得更新整个位姿队列的值
             correctPoses();
 
+            ROS_DEBUG("Before publishOdometry");
+
             publishOdometry();
+
+            ROS_DEBUG("Before publishFrames()");
 
             publishFrames();
         }
@@ -627,6 +651,17 @@ public:
         pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
         {
+            //梳理一下icp用于loop的逻辑
+            // 下面第一行 找到当前帧的点云，进去之后可以发现，最终返回的点云是坐标变换后的结果
+            //也即：transformPointCloud(allCloudKeyFrames[keyNear],   &copy_cloudKeyPoses6D->points[keyNear]);
+            //也就是从allCloudKey里拿点云，使用cloudKeyPose来坐标变换，那就是绝对坐标了
+            //同理，第二行也是获得的在绝对坐标的点云，两个点云的坐标系是一样的
+            //最终，可以看到下面所谓发布正确点云时：
+            // pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
+            // publishCloud(&pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
+            //也即 cure + icp  = cure的正确位置
+            //而计算变换时，tWrong来自于cloudKeyPose ，在这之上乘以icp的结果correctionLidarFrame即为正确的tCorrect
+            // tCorrect = correctionLidarFrame * tWrong;
             loopFindNearKeyframes(cureKeyframeCloud, loopKeyCur, 0);
             loopFindNearKeyframes(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum);
             if (cureKeyframeCloud->size() < 300 || prevKeyframeCloud->size() < 1000)
@@ -894,6 +929,8 @@ public:
         //这个值是在imageProjection中设置，如果odom经过了那边的判断而可用，就设置位true
         if (cloudInfo.odomAvailable == true)
         {
+            ROS_DEBUG("[mapOptimization]updateInitialGuess ::cloudInfo.odomAvailable");
+
             Eigen::Affine3f transBack = pcl::getTransformation(cloudInfo.initialGuessX,    cloudInfo.initialGuessY,     cloudInfo.initialGuessZ, 
                                                                cloudInfo.initialGuessRoll, cloudInfo.initialGuessPitch, cloudInfo.initialGuessYaw);
             if (lastImuPreTransAvailable == false)
@@ -922,6 +959,8 @@ public:
         // use imu incremental estimation for pose guess (only rotation)
         if (cloudInfo.imuAvailable == true)
         {
+            ROS_DEBUG("[mapOptimization]updateInitialGuess ::cloudInfo.imuAvailable");
+
             Eigen::Affine3f transBack = pcl::getTransformation(0, 0, 0, cloudInfo.imuRollInit, cloudInfo.imuPitchInit, cloudInfo.imuYawInit);
             Eigen::Affine3f transIncre = lastImuTransformation.inverse() * transBack;
 
@@ -1418,9 +1457,14 @@ public:
         if (cloudKeyPoses3D->points.empty())
             return;
 
+        ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp judge before");
+
         // if (laserCloudCornerLastDSNum > edgeFeatureMinValidNum && laserCloudSurfLastDSNum > surfFeatureMinValidNum)
         if (laserCloudAllLastDSNum > 100) // 原来是 线特征多于10个 平面特征多于100个 我们的话 直接大于100吧
         {
+
+            ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp in");
+
             // kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
             // kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
             // kdtreeAllFromMap->setInputCloud(laserCloudAllFromMapDS);
@@ -1452,12 +1496,20 @@ public:
              //icp如果正常工作，那么得到的变换是当前帧到绝对坐标系的变换（不太确定）
              //但是这时候 当前帧点云的位姿初值很差（因为这个初值相当于给了个 0 0 0 ），icp这种迭代的方法好像很难成功，所以理论上应该把当前帧点云
              //给变换到地图坐标（可以使用和上面相同的方法），然后icp的结果是在这个变换之上再进行的调整，这样会好很多
+
+             //获取当前帧点云
             pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
             pcl::copyPointCloud(*laserCloudAllLastDS,    *cureKeyframeCloud);
 
             //进行到绝对坐标的变换 使用transformTobeMapped
+            //一个疑问 这里使用transformTobeMapp来进行变换 但我们的局部地图是用cloudKeyPoses6D->points[thisK变换来的
+            //这会使得这两点云不在同一坐标系，而提取局部地图时不能使用transform来变换，所以我们把下面这个改成也用cloudKeyPose来变换?
+            //但是当前帧点云对应的cloudKeyPose6d还不存在呢，需要我们优化后来赋值，可以选择使用上一帧的，但和使用transformTobeMapped也差不多
+            //只不过， 如果imuavil和odoavil的flag都不可用的话，会使得transForm的 3 4 5 没有值 但现在看上去有值 所以我们不改变这个
             cureKeyframeCloud =   transformPointClouduseTransformTobeMapped(cureKeyframeCloud);
 
+            //获取局部地图点云
+            //注意 这个点云是使用cloudKeyPose6D来变换到绝对坐标系的
             pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
             pcl::copyPointCloud(*laserCloudAllFromMap,    *prevKeyframeCloud);
 
@@ -1468,7 +1520,7 @@ public:
             icp.setMaximumIterations(20); //for 回环检测为100  在我们匹配步 设置为20吧
             icp.setTransformationEpsilon(1e-6);
             icp.setEuclideanFitnessEpsilon(1e-6);
-            icp.setRANSACIterations(0); //可能需要打开ransac
+            icp.setRANSACIterations(1); //可能需要打开ransac
 
             // Align clouds   注意这里到底哪个放在Source 哪个放在Target
             //看下面发布时的写法，是把cureCloud 用icp结果进行变换 所以应该是对的
@@ -1478,7 +1530,16 @@ public:
             icp.align(*unused_result);
 
             if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
-                return;
+            {
+                ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged or historyFitnessScore is too big");
+                ROS_DEBUG_STREAM("[mapOptimization]scan2MapOptimization :: historyFitnessScore  ="<<historyKeyframeFitnessScore 
+                <<" icp_fitnessScore = "<< icp.getFitnessScore());
+
+                ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged so we straightly do the transformUpdate using the init guess");
+                //现在ICP总是不收敛 那我们选择先直接做后面的那一步 相当于直接用初始猜测 而完全与lidar odo无关
+                // 所以我们注释掉return
+                // return;
+            }
 
             // publish corrected cloud
             // if (pubIcpKeyFrames.getNumSubscribers() != 0)
@@ -1504,6 +1565,8 @@ public:
             //然后在变换回trans，用于下面的transformUpdate
             transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
             transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
+
+            ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp ends");
 
             //icp end
 
@@ -1959,6 +2022,8 @@ public:
 int main(int argc, char** argv)
 {
     ros::init(argc, argv, "lio_sam");
+
+    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
 
     mapOptimization MO;
 
