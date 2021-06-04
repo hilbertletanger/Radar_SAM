@@ -53,7 +53,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT (PointXYZIRPYT,
 //反正最终就是定义好了6自由度的位姿和其对应的时间
 typedef PointXYZIRPYT  PointTypePose;
 
-
+//giseop
 enum class SCInputType { 
     SINGLE_SCAN_FULL, 
     SINGLE_SCAN_FEAT, 
@@ -261,19 +261,19 @@ public:
         // giseop
         // create directory and remove old files;
         // savePCDDirectory = std::getenv("HOME") + savePCDDirectory; // rather use global path 
-        int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
-        unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
+        // int unused = system((std::string("exec rm -r ") + savePCDDirectory).c_str());
+        // unused = system((std::string("mkdir ") + savePCDDirectory).c_str());
 
-        saveSCDDirectory = savePCDDirectory + "SCDs/"; // SCD: scan context descriptor 
-        unused = system((std::string("exec rm -r ") + saveSCDDirectory).c_str());
-        unused = system((std::string("mkdir -p ") + saveSCDDirectory).c_str());
+        // saveSCDDirectory = savePCDDirectory + "SCDs/"; // SCD: scan context descriptor 
+        // unused = system((std::string("exec rm -r ") + saveSCDDirectory).c_str());
+        // unused = system((std::string("mkdir -p ") + saveSCDDirectory).c_str());
 
-        saveNodePCDDirectory = savePCDDirectory + "Scans/";
-        unused = system((std::string("exec rm -r ") + saveNodePCDDirectory).c_str());
-        unused = system((std::string("mkdir -p ") + saveNodePCDDirectory).c_str());
+        // saveNodePCDDirectory = savePCDDirectory + "Scans/";
+        // unused = system((std::string("exec rm -r ") + saveNodePCDDirectory).c_str());
+        // unused = system((std::string("mkdir -p ") + saveNodePCDDirectory).c_str());
 
-        pgSaveStream = std::fstream(savePCDDirectory + "singlesession_posegraph.g2o", std::fstream::out);
-        pgTimeSaveStream = std::fstream(savePCDDirectory + "times.txt", std::fstream::out); pgTimeSaveStream.precision(dbl::max_digits10);
+        // pgSaveStream = std::fstream(savePCDDirectory + "singlesession_posegraph.g2o", std::fstream::out);
+        // pgTimeSaveStream = std::fstream(savePCDDirectory + "times.txt", std::fstream::out); pgTimeSaveStream.precision(dbl::max_digits10);
         // pgVertexSaveStream = std::fstream(savePCDDirectory + "singlesession_vertex.g2o", std::fstream::out);
         // pgEdgeSaveStream = std::fstream(savePCDDirectory + "singlesession_edge.g2o", std::fstream::out);
     }
@@ -283,6 +283,7 @@ public:
         cloudKeyPoses3D.reset(new pcl::PointCloud<PointType>());
         cloudKeyPoses6D.reset(new pcl::PointCloud<PointTypePose>());
         copy_cloudKeyPoses3D.reset(new pcl::PointCloud<PointType>());
+        copy_cloudKeyPoses2D.reset(new pcl::PointCloud<PointType>());
         copy_cloudKeyPoses6D.reset(new pcl::PointCloud<PointTypePose>());
 
         kdtreeSurroundingKeyPoses.reset(new pcl::KdTreeFLANN<PointType>());
@@ -2166,24 +2167,26 @@ public:
         // }
 
         // save sc data
-        const auto& curr_scd = scManager.getConstRefRecentSCD();
-        std::string curr_scd_node_idx = padZeros(scManager.polarcontexts_.size() - 1);
+        //TODO:现在我们关闭保存
 
-        saveSCD(saveSCDDirectory + curr_scd_node_idx + ".scd", curr_scd);
+        // const auto& curr_scd = scManager.getConstRefRecentSCD();
+        // std::string curr_scd_node_idx = padZeros(scManager.polarcontexts_.size() - 1);
+
+        // saveSCD(saveSCDDirectory + curr_scd_node_idx + ".scd", curr_scd);
 
 
         // save keyframe cloud as file giseop
-        bool saveRawCloud { true };
-        pcl::PointCloud<PointType>::Ptr thisKeyFrameCloud(new pcl::PointCloud<PointType>());
-        if(saveRawCloud) { 
-            *thisKeyFrameCloud += *laserCloudRaw;
-        } 
-        // else {
-        //     *thisKeyFrameCloud += *thisCornerKeyFrame;
-        //     *thisKeyFrameCloud += *thisSurfKeyFrame;
-        // }
-        pcl::io::savePCDFileBinary(saveNodePCDDirectory + curr_scd_node_idx + ".pcd", *thisKeyFrameCloud);
-        pgTimeSaveStream << laserCloudRawTime << std::endl;
+        // bool saveRawCloud { true };
+        // pcl::PointCloud<PointType>::Ptr thisKeyFrameCloud(new pcl::PointCloud<PointType>());
+        // if(saveRawCloud) { 
+        //     *thisKeyFrameCloud += *laserCloudRaw;
+        // } 
+        // // else {
+        // //     *thisKeyFrameCloud += *thisCornerKeyFrame;
+        // //     *thisKeyFrameCloud += *thisSurfKeyFrame;
+        // // }
+        // pcl::io::savePCDFileBinary(saveNodePCDDirectory + curr_scd_node_idx + ".pcd", *thisKeyFrameCloud);
+        // pgTimeSaveStream << laserCloudRawTime << std::endl;
 
 
 

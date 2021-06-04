@@ -20,7 +20,7 @@ radar_sam:
   
   # Export settings
   savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3
-  savePCDDirectory: "/Downloads/LOAM/"        # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
+  savePCDDirectory: "/home/gpal/Lio_sam/Radar_SAM/src/Radar_SAM/resultSave/"        # in your home folder, starts and ends with "/". Warning: the code deletes "LOAM" folder then recreates it. See "mapOptimization" for implementation
 
   # Sensor Settings
   sensor: velodyne                            # lidar sensor type, either 'velodyne' or 'ouster'

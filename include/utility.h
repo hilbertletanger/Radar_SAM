@@ -173,7 +173,7 @@ public:
         nh.param<float>("radar_sam/poseCovThreshold", poseCovThreshold, 25.0);
 
         nh.param<bool>("radar_sam/savePCD", savePCD, false);
-        nh.param<std::string>("radar_sam/savePCDDirectory", savePCDDirectory, "/Downloads/LOAM/");
+        nh.param<std::string>("radar_sam/savePCDDirectory", savePCDDirectory, "/home/gpal/Lio_sam/Radar_SAM/src/Radar_SAM/resultSave");
 
         std::string sensorStr;
         nh.param<std::string>("radar_sam/sensor", sensorStr, "");
