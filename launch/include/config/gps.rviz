@@ -162,7 +162,7 @@ Visualization Manager:
             Shaft Length: 1
             Shaft Radius: 0.05000000074505806
             Value: Axes
-          Topic: /lio_sam/mapping/odometry
+          Topic: /radar_sam/mapping/odometry
           Unreliable: false
           Value: false
       Enabled: true
@@ -194,7 +194,7 @@ Visualization Manager:
           Size (Pixels): 2
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/deskew/cloud_deskewed
+          Topic: /radar_sam/deskew/cloud_deskewed
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -224,7 +224,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/mapping/cloud_registered
+          Topic: /radar_sam/mapping/cloud_registered
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -258,7 +258,7 @@ Visualization Manager:
           Size (Pixels): 5
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/feature/cloud_corner
+          Topic: /radar_sam/feature/cloud_corner
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -288,7 +288,7 @@ Visualization Manager:
           Size (Pixels): 3
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/feature/cloud_surface
+          Topic: /radar_sam/feature/cloud_surface
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -322,7 +322,7 @@ Visualization Manager:
           Size (Pixels): 2
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/mapping/cloud_registered
+          Topic: /radar_sam/mapping/cloud_registered
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -352,7 +352,7 @@ Visualization Manager:
           Size (Pixels): 2
           Size (m): 0.10000000149011612
           Style: Flat Squares
-          Topic: /lio_sam/mapping/map_local
+          Topic: /radar_sam/mapping/map_local
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -382,7 +382,7 @@ Visualization Manager:
           Size (Pixels): 2
           Size (m): 0.009999999776482582
           Style: Points
-          Topic: /lio_sam/mapping/map_global
+          Topic: /radar_sam/mapping/map_global
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
@@ -407,7 +407,7 @@ Visualization Manager:
           Radius: 0.029999999329447746
           Shaft Diameter: 0.10000000149011612
           Shaft Length: 0.10000000149011612
-          Topic: /lio_sam/mapping/path
+          Topic: /radar_sam/mapping/path
           Unreliable: false
           Value: true
         - Alpha: 1
@@ -430,7 +430,7 @@ Visualization Manager:
           Radius: 0.029999999329447746
           Shaft Diameter: 0.10000000149011612
           Shaft Length: 0.10000000149011612
-          Topic: /lio_sam/imu/path
+          Topic: /radar_sam/imu/path
           Unreliable: false
           Value: true
         - Alpha: 1
@@ -458,14 +458,14 @@ Visualization Manager:
           Size (Pixels): 2
           Size (m): 0.30000001192092896
           Style: Flat Squares
-          Topic: /lio_sam/mapping/icp_loop_closure_corrected_cloud
+          Topic: /radar_sam/mapping/icp_loop_closure_corrected_cloud
           Unreliable: false
           Use Fixed Frame: true
           Use rainbow: true
           Value: false
         - Class: rviz/MarkerArray
           Enabled: true
-          Marker Topic: /lio_sam/mapping/loop_closure_constraints
+          Marker Topic: /radar_sam/mapping/loop_closure_constraints
           Name: Loop constraint
           Namespaces:
             {}

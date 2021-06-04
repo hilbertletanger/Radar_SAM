@@ -3,7 +3,10 @@ project(radar_sam)
 #set(CMAKE_BUILD_TYPE Debug)
 set(CMAKE_BUILD_TYPE "Release")
 
-set(CMAKE_CXX_FLAGS "-std=c++11")
+# set(CMAKE_CXX_FLAGS "-std=c++14")
+set(CMAKE_CXX_STANDARD 14)
+# set(CMAKE_CXX_FLAGS "-std=c++11") //default
+
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
 find_package(catkin REQUIRED COMPONENTS
@@ -93,9 +96,14 @@ add_dependencies(${PROJECT_NAME}_featureExtraction ${catkin_EXPORTED_TARGETS} ${
 target_link_libraries(${PROJECT_NAME}_featureExtraction ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES})
 
 # Mapping Optimization
-add_executable(${PROJECT_NAME}_mapOptmization src/mapOptmization.cpp)
+add_executable(${PROJECT_NAME}_mapOptmization 
+  src/mapOptmization.cpp
+  src/Scancontext.cpp
+)
 add_dependencies(${PROJECT_NAME}_mapOptmization ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
+# target_compile_options(${PROJECT_NAME}_mapOptmization PRIVATE c++_std_14)
 target_compile_options(${PROJECT_NAME}_mapOptmization PRIVATE ${OpenMP_CXX_FLAGS})
+
 target_link_libraries(${PROJECT_NAME}_mapOptmization ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBRARIES} ${OpenMP_CXX_FLAGS} gtsam)
 
 # IMU Preintegration

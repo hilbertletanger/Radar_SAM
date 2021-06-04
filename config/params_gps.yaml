@@ -1,4 +1,4 @@
-lio_sam:
+radar_sam:
 
   # Topics
   pointCloudTopic: "radar_points2"               # Point cloud data

@@ -1,6 +1,6 @@
 #include "utility.h"
-#include "lio_sam/cloud_info.h"
-#include "lio_sam/save_map.h"
+#include "radar_sam/cloud_info.h"
+#include "radar_sam/save_map.h"
 
 #include <gtsam/geometry/Rot3.h>
 #include <gtsam/geometry/Pose3.h>
@@ -94,7 +94,7 @@ public:
     ros::ServiceServer srvSaveMap;
 
     std::deque<nav_msgs::Odometry> gpsQueue;
-    lio_sam::cloud_info cloudInfo;
+    radar_sam::cloud_info cloudInfo;
 
     //存放关键帧的点云
     vector<pcl::PointCloud<PointType>::Ptr> cornerCloudKeyFrames;
@@ -195,26 +195,26 @@ public:
         parameters.relinearizeSkip = 1;
         isam = new ISAM2(parameters);
 
-        pubKeyPoses                 = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/trajectory", 1);
-        pubLaserCloudSurround       = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_global", 1);
-        pubLaserOdometryGlobal      = nh.advertise<nav_msgs::Odometry> ("lio_sam/mapping/odometry", 1);
-        pubLaserOdometryIncremental = nh.advertise<nav_msgs::Odometry> ("lio_sam/mapping/odometry_incremental", 1);
-        pubPath                     = nh.advertise<nav_msgs::Path>("lio_sam/mapping/path", 1);
+        pubKeyPoses                 = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/trajectory", 1);
+        pubLaserCloudSurround       = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/map_global", 1);
+        pubLaserOdometryGlobal      = nh.advertise<nav_msgs::Odometry> ("radar_sam/mapping/odometry", 1);
+        pubLaserOdometryIncremental = nh.advertise<nav_msgs::Odometry> ("radar_sam/mapping/odometry_incremental", 1);
+        pubPath                     = nh.advertise<nav_msgs::Path>("radar_sam/mapping/path", 1);
 
         //非常重要的修改，我们直接去接特征提取前的cloud_info
-        subCloud = nh.subscribe<lio_sam::cloud_info>("lio_sam/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
+        subCloud = nh.subscribe<radar_sam::cloud_info>("radar_sam/deskew/cloud_info", 1, &mapOptimization::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
         subGPS   = nh.subscribe<nav_msgs::Odometry> (gpsTopic, 200, &mapOptimization::gpsHandler, this, ros::TransportHints().tcpNoDelay());
         subLoop  = nh.subscribe<std_msgs::Float64MultiArray>("lio_loop/loop_closure_detection", 1, &mapOptimization::loopInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
-        srvSaveMap  = nh.advertiseService("lio_sam/save_map", &mapOptimization::saveMapService, this);
+        srvSaveMap  = nh.advertiseService("radar_sam/save_map", &mapOptimization::saveMapService, this);
 
-        pubHistoryKeyFrames   = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_history_cloud", 1);
-        pubIcpKeyFrames       = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/icp_loop_closure_corrected_cloud", 1);
-        pubLoopConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/lio_sam/mapping/loop_closure_constraints", 1);
+        pubHistoryKeyFrames   = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/icp_loop_closure_history_cloud", 1);
+        pubIcpKeyFrames       = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/icp_loop_closure_corrected_cloud", 1);
+        pubLoopConstraintEdge = nh.advertise<visualization_msgs::MarkerArray>("/radar_sam/mapping/loop_closure_constraints", 1);
 
-        pubRecentKeyFrames    = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/map_local", 1);
-        pubRecentKeyFrame     = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/cloud_registered", 1);
-        pubCloudRegisteredRaw = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/mapping/cloud_registered_raw", 1);
+        pubRecentKeyFrames    = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/map_local", 1);
+        pubRecentKeyFrame     = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/cloud_registered", 1);
+        pubCloudRegisteredRaw = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/mapping/cloud_registered_raw", 1);
 
         downSizeFilterCorner.setLeafSize(mappingCornerLeafSize, mappingCornerLeafSize, mappingCornerLeafSize);
         downSizeFilterSurf.setLeafSize(mappingSurfLeafSize, mappingSurfLeafSize, mappingSurfLeafSize);
@@ -277,7 +277,7 @@ public:
         matP = cv::Mat(6, 6, CV_32F, cv::Scalar::all(0));
     }
 
-    void laserCloudInfoHandler(const lio_sam::cloud_infoConstPtr& msgIn)
+    void laserCloudInfoHandler(const radar_sam::cloud_infoConstPtr& msgIn)
     {
         // extract time stamp
         //这里提取了msg的header的时间戳和 toSec值，应该是一样的只是单位不同
@@ -449,7 +449,7 @@ public:
 
 
 
-    bool saveMapService(lio_sam::save_mapRequest& req, lio_sam::save_mapResponse& res)
+    bool saveMapService(radar_sam::save_mapRequest& req, radar_sam::save_mapResponse& res)
     {
       string saveMapDirectory;
 
@@ -531,8 +531,8 @@ public:
         if (savePCD == false)
             return;
 
-        lio_sam::save_mapRequest  req;
-        lio_sam::save_mapResponse res;
+        radar_sam::save_mapRequest  req;
+        radar_sam::save_mapResponse res;
 
         if(!saveMapService(req, res)){
             cout << "Fail to save map" << endl;
@@ -2021,7 +2021,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "lio_sam");
+    ros::init(argc, argv, "radar_sam");
 
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
 

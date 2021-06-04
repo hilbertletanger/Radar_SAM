@@ -1,5 +1,5 @@
 #include "utility.h"
-#include "lio_sam/cloud_info.h"
+#include "radar_sam/cloud_info.h"
 
 
 // struct OusterPointXYZIRT {
@@ -75,7 +75,7 @@ private:
     float odomIncreY;
     float odomIncreZ;
 
-    lio_sam::cloud_info cloudInfo;
+    radar_sam::cloud_info cloudInfo;
     double timeScanCur;  //对于激光 一帧点云有开始和结束两个时间 对于毫米波 我们只使用timeScanCur
     double timeScanEnd;  //这个之后一定不再使用
     std_msgs::Header cloudHeader;
@@ -92,8 +92,8 @@ public:
         subLaserCloud = nh.subscribe<sensor_msgs::PointCloud2>(pointCloudTopic, 5, &ImageProjection::cloudHandler, this, ros::TransportHints().tcpNoDelay());
         //这里的回调函数应该要改//TODO:
 
-        pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("lio_sam/deskew/cloud_deskewed", 1); //提取的点云，往外发，我们可能不需要这个
-        pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/deskew/cloud_info", 1);   //点云数据的发送
+        pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("radar_sam/deskew/cloud_deskewed", 1); //提取的点云，往外发，我们可能不需要这个
+        pubLaserCloudInfo = nh.advertise<radar_sam::cloud_info> ("radar_sam/deskew/cloud_info", 1);   //点云数据的发送
 
         allocateMemory();
         resetParameters();
@@ -648,7 +648,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "lio_sam");
+    ros::init(argc, argv, "radar_sam");
 
     //打开DEBUG调试信息
     ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);

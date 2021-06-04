@@ -1,5 +1,5 @@
 #include "utility.h"
-#include "lio_sam/cloud_info.h"
+#include "radar_sam/cloud_info.h"
 
 struct smoothness_t{ 
     float value;
@@ -31,7 +31,7 @@ public:
     //设置一个下采样的体素滤波 我们不需要
     pcl::VoxelGrid<PointType> downSizeFilter;
 
-    lio_sam::cloud_info cloudInfo;
+    radar_sam::cloud_info cloudInfo;
     std_msgs::Header cloudHeader;
 
 
@@ -44,12 +44,12 @@ public:
     FeatureExtraction()
     {
         //订阅imageProjection出来的cloud info
-        subLaserCloudInfo = nh.subscribe<lio_sam::cloud_info>("lio_sam/deskew/cloud_info", 1, &FeatureExtraction::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
+        subLaserCloudInfo = nh.subscribe<radar_sam::cloud_info>("radar_sam/deskew/cloud_info", 1, &FeatureExtraction::laserCloudInfoHandler, this, ros::TransportHints().tcpNoDelay());
 
         //做完之后再发布cloude info 和两种点云
-        pubLaserCloudInfo = nh.advertise<lio_sam::cloud_info> ("lio_sam/feature/cloud_info", 1);
-        pubCornerPoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_corner", 1);
-        pubSurfacePoints = nh.advertise<sensor_msgs::PointCloud2>("lio_sam/feature/cloud_surface", 1);
+        pubLaserCloudInfo = nh.advertise<radar_sam::cloud_info> ("radar_sam/feature/cloud_info", 1);
+        pubCornerPoints = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/feature/cloud_corner", 1);
+        pubSurfacePoints = nh.advertise<sensor_msgs::PointCloud2>("radar_sam/feature/cloud_surface", 1);
         
         initializationValue();
     }
@@ -69,7 +69,7 @@ public:
         cloudLabel = new int[N_SCAN*Horizon_SCAN];
     }
 
-    void laserCloudInfoHandler(const lio_sam::cloud_infoConstPtr& msgIn)
+    void laserCloudInfoHandler(const radar_sam::cloud_infoConstPtr& msgIn)
     {
         cloudInfo = *msgIn; // new cloud info
         cloudHeader = msgIn->header; // new cloud header
@@ -272,7 +272,7 @@ public:
 
 int main(int argc, char** argv)
 {
-    ros::init(argc, argv, "lio_sam");
+    ros::init(argc, argv, "radar_sam");
 
     FeatureExtraction FE;
 
