@@ -8,6 +8,7 @@
 #include <std_msgs/Float64MultiArray.h>
 #include <sensor_msgs/Imu.h>
 #include <sensor_msgs/PointCloud2.h>
+#include <sensor_msgs/Image.h>
 #include <sensor_msgs/NavSatFix.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
@@ -15,6 +16,7 @@
 #include <visualization_msgs/MarkerArray.h>
 
 #include <opencv/cv.h>
+#include <cv_bridge/cv_bridge.h>
 
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
@@ -94,11 +96,14 @@ public:
     // Lidar Sensor Configuration
     SensorType sensor;
     int Radar_target_number;
-    int N_SCAN;
-    int Horizon_SCAN;
+    int N_ROW;
+    int N_COLUMN;
+    float rangeResolution;
     int downsampleRate;
-    float lidarMinRange;
-    float lidarMaxRange;
+    float radarMinRange;
+    float radarMaxRange;
+
+    int orb_patch_size;
 
     // IMU
     float imuAccNoise;
@@ -192,12 +197,15 @@ public:
             ros::shutdown();
         }
 
-        nh.param<int>("radar_sam/N_SCAN", N_SCAN, 16);
+        nh.param<int>("radar_sam/N_ROW", N_ROW, 16);
         nh.param<int>("radar_sam/Radar_target_numbert",Radar_target_number, 2000);
-        nh.param<int>("radar_sam/Horizon_SCAN", Horizon_SCAN, 1800);
+        nh.param<int>("radar_sam/N_COLUMN", N_COLUMN, 1800);
+        nh.param<float>("radar_sam/rangeResolution", rangeResolution, 0.25);
         nh.param<int>("radar_sam/downsampleRate", downsampleRate, 1);
-        nh.param<float>("radar_sam/lidarMinRange", lidarMinRange, 1.0);
-        nh.param<float>("radar_sam/lidarMaxRange", lidarMaxRange, 1000.0);
+        nh.param<float>("radar_sam/radarMinRange", radarMinRange, 1.0);
+        nh.param<float>("radar_sam/radarMaxRange", radarMaxRange, 1000.0);
+
+        nh.param<int>("radar_sam/orb_patch_size",  orb_patch_size, 21);
 
         nh.param<float>("radar_sam/imuAccNoise", imuAccNoise, 0.01);
         nh.param<float>("radar_sam/imuGyrNoise", imuGyrNoise, 0.001);

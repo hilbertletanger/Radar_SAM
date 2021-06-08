@@ -24,12 +24,16 @@ radar_sam:
 
   # Sensor Settings
   sensor: velodyne                            # lidar sensor type, either 'velodyne' or 'ouster'
-  N_SCAN: 16                                  # number of lidar channel (i.e., 16, 32, 64, 128)
+  N_ROW: 800                                  # 360 
   Radar_target_number: 2000  
-  Horizon_SCAN: 1800                          # lidar horizontal resolution (Velodyne:1800, Ouster:512,1024,2048)
+  N_COLUMN: 800                          # 1000
+  rangeResolution : 0.25
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
-  lidarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used
-  lidarMaxRange: 1000.0                       # default: 1000.0, maximum lidar range to be used
+  radarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used
+  radarMaxRange: 1000.0                       # default: 1000.0, maximum lidar range to be used
+
+  # Feature Extraction Settings
+  orb_patch_size: 21 #定义邻域大小
 
   # IMU Settings
   imuAccNoise: 3.9939570888238808e-03

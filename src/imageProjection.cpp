@@ -112,11 +112,11 @@ public:
         fullCloud->points.resize(Radar_target_number);
 
 
-        cloudInfo.startRingIndex.assign(N_SCAN, 0);
-        cloudInfo.endRingIndex.assign(N_SCAN, 0);
+        cloudInfo.startRingIndex.assign(N_ROW, 0);
+        cloudInfo.endRingIndex.assign(N_ROW, 0);
 
-        cloudInfo.pointColInd.assign(N_SCAN*Horizon_SCAN, 0);
-        cloudInfo.pointRange.assign(N_SCAN*Horizon_SCAN, 0);
+        cloudInfo.pointColInd.assign(N_ROW*N_COLUMN, 0);
+        cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
 
         resetParameters();
     }
@@ -126,7 +126,7 @@ public:
         laserCloudIn->clear();
         extractedCloud->clear();
         // reset range matrix for range image projection
-        rangeMat = cv::Mat(N_SCAN, Horizon_SCAN, CV_32F, cv::Scalar::all(FLT_MAX));
+        rangeMat = cv::Mat(N_ROW, N_COLUMN, CV_32F, cv::Scalar::all(FLT_MAX));
 
         imuPointerCur = 0;
         firstPointFlag = true;
@@ -532,69 +532,99 @@ public:
     //现在，我们选择不做投影，因为匹配不在这里，所以我们基本什么都不做，我们保留之前试图投影radar时的代码
     //我们看到，原来的架构里，这里主要输出两个东西，一个是rangemap，一个是fullCloud，我们保留fullCloud
     {
-        int cloudSize = laserCloudIn->points.size();
-        int index =0;
-        for (int i = 0; i < cloudSize; ++i)
-        {
-            PointType thisPoint;
-            thisPoint.x = laserCloudIn->points[i].x;
-            thisPoint.y = laserCloudIn->points[i].y;
-            thisPoint.z = laserCloudIn->points[i].z;
-            // int index = columnIdn + rowIdn * Horizon_SCAN;
-            //原版的index如上，我们直接++好了，但可能需要调试TODO:
-            fullCloud->points[index] = thisPoint;
-            index++;
-        }
-        //下面是试图radar投影的代码
         // int cloudSize = laserCloudIn->points.size();
-        // // range image projection
+        // int index =0;
         // for (int i = 0; i < cloudSize; ++i)
         // {
         //     PointType thisPoint;
         //     thisPoint.x = laserCloudIn->points[i].x;
         //     thisPoint.y = laserCloudIn->points[i].y;
         //     thisPoint.z = laserCloudIn->points[i].z;
-        //     // thisPoint.intensity = laserCloudIn->points[i].intensity;
-
-        //     float range = pointDistance(thisPoint);
-        //     if (range < lidarMinRange || range > lidarMaxRange)
-        //         continue;
-
-        //     // int rowIdn = laserCloudIn->points[i].ring;
-        //     float verticalAngle = atan2(thisPoint.z, sqrt(thisPoint.x * thisPoint.x + thisPoint.y * thisPoint.y)) * 180 / M_PI;
-
-        //     // rowIdn计算   出该点激光雷达是竖直方向上第几线的
-        //     // 从下往上计数，-15度记为初始线，第0线，一共16线(N_SCAN=16)
-        //     float ang_bottom = 30; //TODO: 设置毫米波的投影参数
-        //     float ang_res_y = 5;
-        //     int rowIdn = (verticalAngle + ang_bottom) / ang_res_y;
-
-        //     if (rowIdn < 0 || rowIdn >= N_SCAN)
-        //         continue;
-
-        //     if (rowIdn % downsampleRate != 0)
-        //         continue;
-
-        //     float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
-
-        //     static float ang_res_x = 360.0/float(Horizon_SCAN);
-        //     int columnIdn = -round((horizonAngle-90.0)/ang_res_x) + Horizon_SCAN/2;
-        //     if (columnIdn >= Horizon_SCAN)
-        //         columnIdn -= Horizon_SCAN;
-
-        //     if (columnIdn < 0 || columnIdn >= Horizon_SCAN)
-        //         continue;
-
-        //     if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
-        //         continue;
-
-        //     // thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);//这里使用time来去畸变 实际上radar不需要
-
-        //     rangeMat.at<float>(rowIdn, columnIdn) = range;
-
-        //     int index = columnIdn + rowIdn * Horizon_SCAN;
+        //     // int index = columnIdn + rowIdn * Horizon_SCAN;
+        //     //原版的index如上，我们直接++好了，但可能需要调试
         //     fullCloud->points[index] = thisPoint;
+        //     index++;
         // }
+        // 上面是 如果不进行投影的话  把上面打开 而把下面全部关闭
+
+
+        // 重新进行radar投影 目的是投影 x行（一行代表一个角度）y列 （一列代表一个距离），每个位置的值是平均高度（或者数量）
+        //下面是试图radar投影的代码
+        int cloudSize = laserCloudIn->points.size();
+        int index = 0;
+        // range image projection
+        for (int i = 0; i < cloudSize; ++i)
+        {
+            PointType thisPoint;
+            thisPoint.x = laserCloudIn->points[i].x;
+            thisPoint.y = laserCloudIn->points[i].y;
+            thisPoint.z = laserCloudIn->points[i].z;
+            // thisPoint.intensity = laserCloudIn->points[i].intensity;
+
+            // //投影ver1 投影 x行（一行代表一个角度）y列 （一列代表一个距离），每个位置的值是平均高度（或者数量）
+            // // rowIdn计算  
+            // float range = pointDistance(thisPoint);
+            // if (range < radarMinRange || range > radarMaxRange)
+            //     continue;
+
+
+            // // int rowIdn = laserCloudIn->points[i].ring;
+            // float Angle = atan2(thisPoint.y, thisPoint.x) * 180 / M_PI;
+
+            // float ang_zero = 180;  //预留的用于调整角度初值的量 防止rowIdn有负值 设置为180意味着，冲后为角度的0点
+            // float ang_res_y = 1; //角分辨率 暂时用1度 那么一共360个行
+            // int rowIdn = (Angle + ang_zero) / ang_res_y;
+
+            // if (rowIdn < 0 || rowIdn >= N_ROW)
+            //     continue;
+
+            // if (rowIdn % downsampleRate != 0)
+            //     continue;
+
+            // // columnIdn计算
+            // float horizonAngle = atan2(thisPoint.x, thisPoint.y) * 180 / M_PI;
+
+            // int columnIdn = round(sqrt( thisPoint.x*thisPoint.x + thisPoint.y*thisPoint.y)/rangeResolution);
+
+            // if (columnIdn < 0 || columnIdn >= N_COLUMN)
+            //     continue;
+
+            //投影ver2 投影 x行（一行代表一个x距离）y列 （一列代表一个y距离），每个位置的值是平均高度（或者数量）
+            // rowIdn计算  
+            int rowIdn = round(thisPoint.x/rangeResolution +N_ROW/2);
+
+            if (rowIdn < 0 || rowIdn >= N_ROW)
+                continue;
+
+            if (rowIdn % downsampleRate != 0)
+                continue;
+
+            // columnIdn计算
+            int columnIdn = round(thisPoint.y/rangeResolution +N_COLUMN/2);
+
+            if (columnIdn < 0 || columnIdn >= N_COLUMN)
+                continue;
+
+            //这里做 如果这个位置已经有值了该做什么处理（什么都不做，或者计算平均高度，或者计算数量）
+            if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
+            {
+                //我们暂时计算平均高度
+                // rangeMat.at<float>(rowIdn, columnIdn) = (thisPoint.z + rangeMat.at<float>(rowIdn, columnIdn) )/2;
+                continue;
+            }
+            // thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);//这里使用time来去畸变 实际上radar不需要
+
+            // 这里写 到底rangeMap的值是什么  （用range 或者平均高度 或者数量）
+            //用range的话不太合理，因为range已经被编码进列了
+            //用数量的话，绝大多数情况会是二值的
+            //原版Newman是用power这种量 我们暂时使用平均高度
+            rangeMat.at<float>(rowIdn, columnIdn) = thisPoint.z;
+            
+            //可以考虑用这里来写index就像liosam里一样，但是不知道有什么意义，暂时不做 TODO:
+            // int index = columnIdn + rowIdn * N_COLUMN;
+            fullCloud->points[index] = thisPoint;
+            index++;
+        }
     }
 
     //本来是，把rangeMap存在Cloudinfo里，以及得到extractedCloud变量
@@ -613,6 +643,7 @@ public:
             // size of extracted cloud
             ++count;
         }
+
         // int count = 0;
         // // extract segmented cloud for lidar odometry
         // for (int i = 0; i < N_SCAN; ++i)
@@ -641,8 +672,11 @@ public:
     void publishClouds()
     {
         cloudInfo.header = cloudHeader;
+        sensor_msgs::Image msg = *(cv_bridge::CvImage(std_msgs::Header(), "bgr8", rangeMat).toImageMsg());
+        cloudInfo.rangeMap = msg;
         cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame); 
         pubLaserCloudInfo.publish(cloudInfo);
+
     }
 };
 

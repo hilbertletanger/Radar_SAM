@@ -99,6 +99,8 @@ target_link_libraries(${PROJECT_NAME}_featureExtraction ${catkin_LIBRARIES} ${PC
 add_executable(${PROJECT_NAME}_mapOptmization 
   src/mapOptmization.cpp
   src/Scancontext.cpp
+  src/radar_utils.cpp
+  src/association.cpp
 )
 add_dependencies(${PROJECT_NAME}_mapOptmization ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_generate_messages_cpp)
 # target_compile_options(${PROJECT_NAME}_mapOptmization PRIVATE c++_std_14)

@@ -56,7 +56,7 @@ public:
 
     void initializationValue()
     {
-        cloudSmoothness.resize(N_SCAN*Horizon_SCAN);
+        cloudSmoothness.resize(N_COLUMN*N_ROW);
 
         downSizeFilter.setLeafSize(odometrySurfLeafSize, odometrySurfLeafSize, odometrySurfLeafSize);
 
@@ -64,9 +64,9 @@ public:
         cornerCloud.reset(new pcl::PointCloud<PointType>());
         surfaceCloud.reset(new pcl::PointCloud<PointType>());
 
-        cloudCurvature = new float[N_SCAN*Horizon_SCAN];
-        cloudNeighborPicked = new int[N_SCAN*Horizon_SCAN];
-        cloudLabel = new int[N_SCAN*Horizon_SCAN];
+        cloudCurvature = new float[N_COLUMN*N_ROW];
+        cloudNeighborPicked = new int[N_COLUMN*N_ROW];
+        cloudLabel = new int[N_COLUMN*N_ROW];
     }
 
     void laserCloudInfoHandler(const radar_sam::cloud_infoConstPtr& msgIn)
@@ -155,7 +155,7 @@ public:
         pcl::PointCloud<PointType>::Ptr surfaceCloudScan(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr surfaceCloudScanDS(new pcl::PointCloud<PointType>());
 
-        for (int i = 0; i < N_SCAN; i++)
+        for (int i = 0; i < N_ROW; i++)
         {
             surfaceCloudScan->clear();
 
