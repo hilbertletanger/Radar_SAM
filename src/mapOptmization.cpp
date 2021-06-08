@@ -403,8 +403,8 @@ public:
 
         t1 = t2; desc1 = desc2.clone(); cart_targets1 = cart_targets2;
         kp1 = kp2; img2.copyTo(img1);
-        cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msgIn->rangeMap, sensor_msgs::image_encodings::BGR8);
-        img1 = cv_ptr -> image;
+        // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msgIn->rangeMap, sensor_msgs::image_encodings::BGR8);
+        // img1 = cv_ptr -> image;
         
         //分别提取平面点和角点
         //我们在这里把我们要用的点云也拿出来
@@ -1834,59 +1834,59 @@ public:
 
             //从这里开始使用Newman方法匹配
 
-            //先提orb特征
-            detector->detect(img2, kp2);
-            detector->compute(img2, kp2, desc2);
-            convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
-            // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
+            // //先提orb特征
+            // detector->detect(img2, kp2);
+            // detector->compute(img2, kp2, desc2);
+            // convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
+            // // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
 
 
-            //  Match keypoint descriptors
-            std::vector<std::vector<cv::DMatch>> knn_matches;
-            //desc1中放submap（暂时用前一帧），desc2中放当前帧
-            matcher->knnMatch(desc1, desc2, knn_matches, 2);
+            // //  Match keypoint descriptors
+            // std::vector<std::vector<cv::DMatch>> knn_matches;
+            // //desc1中放submap（暂时用前一帧），desc2中放当前帧
+            // matcher->knnMatch(desc1, desc2, knn_matches, 2);
 
-            // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
-            std::vector<cv::DMatch> good_matches;
-            for (uint j = 0; j < knn_matches.size(); ++j) {
-                if (!knn_matches[j].size())
-                    continue;
-                if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
-                    good_matches.push_back(knn_matches[j][0]);
-                }
-            }
+            // // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
+            // std::vector<cv::DMatch> good_matches;
+            // for (uint j = 0; j < knn_matches.size(); ++j) {
+            //     if (!knn_matches[j].size())
+            //         continue;
+            //     if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
+            //         good_matches.push_back(knn_matches[j][0]);
+            //     }
+            // }
 
-            // Convert the good key point matches to Eigen matrices
-            Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
-            Eigen::MatrixXd p2 = p1;
-            std::vector<int64_t> t1prime = t1, t2prime = t2;
-            for (uint j = 0; j < good_matches.size(); ++j) {
-                p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
-                p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
-                p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
-                p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
-                t1prime[j] = t1[good_matches[j].queryIdx];
-                t2prime[j] = t2[good_matches[j].trainIdx];
-            }
-            t1prime.resize(good_matches.size());
-            t2prime.resize(good_matches.size());
+            // // Convert the good key point matches to Eigen matrices
+            // Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
+            // Eigen::MatrixXd p2 = p1;
+            // std::vector<int64_t> t1prime = t1, t2prime = t2;
+            // for (uint j = 0; j < good_matches.size(); ++j) {
+            //     p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
+            //     p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
+            //     p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
+            //     p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
+            //     t1prime[j] = t1[good_matches[j].queryIdx];
+            //     t2prime[j] = t2[good_matches[j].trainIdx];
+            // }
+            // t1prime.resize(good_matches.size());
+            // t2prime.resize(good_matches.size());
 
-            //这里计算一个时间差
-            // std::vector<std::string> parts;
-            // boost::split(parts, radar_files[i], boost::is_any_of("."));
-            // int64 time1 = std::stoll(parts[0]);
-            // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
-            // int64 time2 = std::stoll(parts[0]);
-            // double delta_t = (time2 - time1) / 1000000.0;
+            // //这里计算一个时间差
+            // // std::vector<std::string> parts;
+            // // boost::split(parts, radar_files[i], boost::is_any_of("."));
+            // // int64 time1 = std::stoll(parts[0]);
+            // // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
+            // // int64 time2 = std::stoll(parts[0]);
+            // // double delta_t = (time2 - time1) / 1000000.0;
 
-            // v1: Compute the transformation using RANSAC
-            // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
-            Ransac ransac(p2, p1, 0.35, 0.9, 100); //实在太累 直接赋值吧
+            // // v1: Compute the transformation using RANSAC
+            // // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
+            // Ransac ransac(p2, p1, 0.35, 0.9, 100); //实在太累 直接赋值吧
 
-            srand(1); //随机种子 应该要给个不会重复的数字 之后再弄 TODO:
-            ransac.computeModel();
-            Eigen::MatrixXd T;  // T_1_2
-            ransac.getTransform(T);
+            // srand(1); //随机种子 应该要给个不会重复的数字 之后再弄 TODO:
+            // ransac.computeModel();
+            // Eigen::MatrixXd T;  // T_1_2
+            // ransac.getTransform(T);
 
 
             // ICP Settings
@@ -1945,16 +1945,16 @@ public:
 
             //icp end
 
-            //我们来看一下 ICP的结果和现在的特征结果
-            ROS_DEBUG_STREAM("icp results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
-            <<" z = "<<transformTobeMapped[5]);
+            // //我们来看一下 ICP的结果和现在的特征结果
+            // ROS_DEBUG_STREAM("icp results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+            // <<" z = "<<transformTobeMapped[5]);
 
-            Eigen::Affine3f tempAffinedfromMatrix;
-            tempAffinedfromMatrix.matrix() = T.cast<float>();
-            Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
-            pcl::getTranslationAndEulerAngles (tAfter_orb, x, y, z, roll, pitch, yaw);
-            ROS_DEBUG_STREAM("orb results: TRANS x = "<< x << " y = " << y
-            <<" z = "<<z);
+            // Eigen::Affine3f tempAffinedfromMatrix;
+            // tempAffinedfromMatrix.matrix() = T.cast<float>();
+            // Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
+            // pcl::getTranslationAndEulerAngles (tAfter_orb, x, y, z, roll, pitch, yaw);
+            // ROS_DEBUG_STREAM("orb results: TRANS x = "<< x << " y = " << y
+            // <<" z = "<<z);
 
             transformUpdate();
 
