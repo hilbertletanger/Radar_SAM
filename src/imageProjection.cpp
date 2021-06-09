@@ -119,6 +119,8 @@ public:
         cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
 
         resetParameters();
+        cout<<"[DEBUG]91" <<endl;
+
     }
 
     void resetParameters()
@@ -139,6 +141,8 @@ public:
             imuRotY[i] = 0;
             imuRotZ[i] = 0;
         }
+        cout<<"[DEBUG]9" <<endl;
+
     }
 
     ~ImageProjection(){}

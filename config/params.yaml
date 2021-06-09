@@ -24,7 +24,7 @@ radar_sam:
 
   # Sensor Settings
   sensor: velodyne                            # lidar sensor type, either 'velodyne' or 'ouster'
-  N_ROW: 800                                  # 360 
+  N_ROW: 32                                  # 360 
   Radar_target_number: 2000  
   N_COLUMN: 800                          # 1000
   rangeResolution : 0.25
