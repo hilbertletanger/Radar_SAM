@@ -1,5 +1,9 @@
 radar_sam:
 
+  # our params
+  frontEndMethodFlag: 1 # 1 for orb feature dectection  2 for icp
+
+
   # Topics
   pointCloudTopic: "radar_points2"               # Point cloud data
   imuTopic: "imu"                         # IMU data

@@ -330,15 +330,15 @@ public:
         laserCloudOri.reset(new pcl::PointCloud<PointType>());
         coeffSel.reset(new pcl::PointCloud<PointType>());
 
-        laserCloudOriCornerVec.resize(N_ROW * N_COLUMN);
-        coeffSelCornerVec.resize(N_ROW*N_COLUMN);
-        laserCloudOriCornerFlag.resize(N_ROW*N_COLUMN);
-        laserCloudOriSurfVec.resize(N_ROW*N_COLUMN);
-        coeffSelSurfVec.resize(N_ROW*N_COLUMN);
-        laserCloudOriSurfFlag.resize(N_ROW*N_COLUMN);
+        // laserCloudOriCornerVec.resize(N_ROW * N_COLUMN);
+        // coeffSelCornerVec.resize(N_ROW*N_COLUMN);
+        // laserCloudOriCornerFlag.resize(N_ROW*N_COLUMN);
+        // laserCloudOriSurfVec.resize(N_ROW*N_COLUMN);
+        // coeffSelSurfVec.resize(N_ROW*N_COLUMN);
+        // laserCloudOriSurfFlag.resize(N_ROW*N_COLUMN);
 
-        std::fill(laserCloudOriCornerFlag.begin(), laserCloudOriCornerFlag.end(), false);
-        std::fill(laserCloudOriSurfFlag.begin(), laserCloudOriSurfFlag.end(), false);
+        // std::fill(laserCloudOriCornerFlag.begin(), laserCloudOriCornerFlag.end(), false);
+        // std::fill(laserCloudOriSurfFlag.begin(), laserCloudOriSurfFlag.end(), false);
 
         laserCloudCornerFromMap.reset(new pcl::PointCloud<PointType>());
         laserCloudSurfFromMap.reset(new pcl::PointCloud<PointType>());
@@ -403,8 +403,8 @@ public:
 
         t1 = t2; desc1 = desc2.clone(); cart_targets1 = cart_targets2;
         kp1 = kp2; img2.copyTo(img1);
-        // cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msgIn->rangeMap, sensor_msgs::image_encodings::BGR8);
-        // img1 = cv_ptr -> image;
+        cv_bridge::CvImagePtr cv_ptr = cv_bridge::toCvCopy(msgIn->rangeMap, sensor_msgs::image_encodings::BGR8);
+        img2 = cv_ptr -> image;
         
         //分别提取平面点和角点
         //我们在这里把我们要用的点云也拿出来
@@ -1771,6 +1771,25 @@ public:
         return false; // keep optimizing
     }
 
+
+    bool matIsEqual(const cv::Mat mat1, const cv::Mat mat2) {
+	if (mat1.empty() && mat2.empty()) {
+		return true;
+	}
+	if (mat1.cols != mat2.cols || mat1.rows != mat2.rows || mat1.dims != mat2.dims||
+		mat1.channels()!=mat2.channels()) {
+		return false;
+	}
+	if (mat1.size() != mat2.size() || mat1.channels() != mat2.channels() || mat1.type() != mat2.type()) {
+		return false;
+	}
+	int nrOfElements1 = mat1.total()*mat1.elemSize();
+	if (nrOfElements1 != mat2.total()*mat2.elemSize()) return false;
+	bool lvRet = memcmp(mat1.data, mat2.data, nrOfElements1) == 0;
+	return lvRet;
+}
+
+
     void scan2MapOptimization()
     {
         if (cloudKeyPoses3D->points.empty())
@@ -1817,144 +1836,180 @@ public:
              //给变换到地图坐标（可以使用和上面相同的方法），然后icp的结果是在这个变换之上再进行的调整，这样会好很多
 
              //获取当前帧点云
-            pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
-            pcl::copyPointCloud(*laserCloudAllLastDS,    *cureKeyframeCloud);
-
-            //进行到绝对坐标的变换 使用transformTobeMapped
-            //一个疑问 这里使用transformTobeMapp来进行变换 但我们的局部地图是用cloudKeyPoses6D->points[thisK变换来的
-            //这会使得这两点云不在同一坐标系，而提取局部地图时不能使用transform来变换，所以我们把下面这个改成也用cloudKeyPose来变换?
-            //但是当前帧点云对应的cloudKeyPose6d还不存在呢，需要我们优化后来赋值，可以选择使用上一帧的，但和使用transformTobeMapped也差不多
-            //只不过， 如果imuavil和odoavil的flag都不可用的话，会使得transForm的 3 4 5 没有值 但现在看上去有值 所以我们不改变这个
-            cureKeyframeCloud =   transformPointClouduseTransformTobeMapped(cureKeyframeCloud);
-
-            //获取局部地图点云
-            //注意 这个点云是使用cloudKeyPose6D来变换到绝对坐标系的
-            pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
-            pcl::copyPointCloud(*laserCloudAllFromMap,    *prevKeyframeCloud);
-
-            //从这里开始使用Newman方法匹配
-
-            // //先提orb特征
-            // detector->detect(img2, kp2);
-            // detector->compute(img2, kp2, desc2);
-            // convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
-            // // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
 
 
-            // //  Match keypoint descriptors
-            // std::vector<std::vector<cv::DMatch>> knn_matches;
-            // //desc1中放submap（暂时用前一帧），desc2中放当前帧
-            // matcher->knnMatch(desc1, desc2, knn_matches, 2);
-
-            // // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
-            // std::vector<cv::DMatch> good_matches;
-            // for (uint j = 0; j < knn_matches.size(); ++j) {
-            //     if (!knn_matches[j].size())
-            //         continue;
-            //     if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
-            //         good_matches.push_back(knn_matches[j][0]);
-            //     }
-            // }
-
-            // // Convert the good key point matches to Eigen matrices
-            // Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
-            // Eigen::MatrixXd p2 = p1;
-            // std::vector<int64_t> t1prime = t1, t2prime = t2;
-            // for (uint j = 0; j < good_matches.size(); ++j) {
-            //     p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
-            //     p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
-            //     p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
-            //     p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
-            //     t1prime[j] = t1[good_matches[j].queryIdx];
-            //     t2prime[j] = t2[good_matches[j].trainIdx];
-            // }
-            // t1prime.resize(good_matches.size());
-            // t2prime.resize(good_matches.size());
-
-            // //这里计算一个时间差
-            // // std::vector<std::string> parts;
-            // // boost::split(parts, radar_files[i], boost::is_any_of("."));
-            // // int64 time1 = std::stoll(parts[0]);
-            // // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
-            // // int64 time2 = std::stoll(parts[0]);
-            // // double delta_t = (time2 - time1) / 1000000.0;
-
-            // // v1: Compute the transformation using RANSAC
-            // // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
-            // Ransac ransac(p2, p1, 0.35, 0.9, 100); //实在太累 直接赋值吧
-
-            // srand(1); //随机种子 应该要给个不会重复的数字 之后再弄 TODO:
-            // ransac.computeModel();
-            // Eigen::MatrixXd T;  // T_1_2
-            // ransac.getTransform(T);
-
-
-            // ICP Settings
-            static pcl::IterativeClosestPoint<PointType, PointType> icp;
-            icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius*2);//我们这里不是回环检测，所以不需要设置这么大 但是可能需要调试才能知道结果 TODO:
-            icp.setMaximumIterations(20); //for 回环检测为100  在我们匹配步 设置为20吧
-            icp.setTransformationEpsilon(1e-6);
-            icp.setEuclideanFitnessEpsilon(1e-6);
-            icp.setRANSACIterations(1); //可能需要打开ransac
-
-            // Align clouds   注意这里到底哪个放在Source 哪个放在Target
-            //看下面发布时的写法，是把cureCloud 用icp结果进行变换 所以应该是对的
-            icp.setInputSource(cureKeyframeCloud);
-            icp.setInputTarget(prevKeyframeCloud);
-            pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
-            icp.align(*unused_result);
-
-            if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
-            {
-                ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged or historyFitnessScore is too big");
-                ROS_DEBUG_STREAM("[mapOptimization]scan2MapOptimization :: historyFitnessScore  ="<<historyKeyframeFitnessScore 
-                <<" icp_fitnessScore = "<< icp.getFitnessScore());
-
-                ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged so we straightly do the transformUpdate using the init guess");
-                //现在ICP总是不收敛 那我们选择先直接做后面的那一步 相当于直接用初始猜测 而完全与lidar odo无关
-                // 所以我们注释掉return
-                // return;
-            }
-
-            // publish corrected cloud
-            // if (pubIcpKeyFrames.getNumSubscribers() != 0)
+            // if (frontEndMethodFlag==2) // 使用icp
             // {
-            //     pcl::PointCloud<PointType>::Ptr closed_cloud(new pcl::PointCloud<PointType>());
-            //     pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
-            //     publishCloud(&pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
+                pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
+                pcl::copyPointCloud(*laserCloudAllLastDS,    *cureKeyframeCloud);
+
+                //进行到绝对坐标的变换 使用transformTobeMapped
+                //一个疑问 这里使用transformTobeMapp来进行变换 但我们的局部地图是用cloudKeyPoses6D->points[thisK变换来的
+                //这会使得这两点云不在同一坐标系，而提取局部地图时不能使用transform来变换，所以我们把下面这个改成也用cloudKeyPose来变换?
+                //但是当前帧点云对应的cloudKeyPose6d还不存在呢，需要我们优化后来赋值，可以选择使用上一帧的，但和使用transformTobeMapped也差不多
+                //只不过， 如果imuavil和odoavil的flag都不可用的话，会使得transForm的 3 4 5 没有值 但现在看上去有值 所以我们不改变这个
+                cureKeyframeCloud =   transformPointClouduseTransformTobeMapped(cureKeyframeCloud);
+
+                //获取局部地图点云
+                //注意 这个点云是使用cloudKeyPose6D来变换到绝对 坐标系的
+                pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
+                pcl::copyPointCloud(*laserCloudAllFromMap,    *prevKeyframeCloud);
+
+                //从这里开始使用Newman方法匹配
+
+                //先提orb特征
+                // detector->detect(img2, kp2);
+                // ROS_DEBUG_STREAM("kp2   size"<< kp2.size());
+                // ROS_DEBUG_STREAM("imag2   size"<< img2.size());
+
+
+                // detector->compute(img2, kp2, desc2);
+                // convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
+                // // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
+
+
+                // //  Match keypoint descriptors
+                // std::vector<std::vector<cv::DMatch>> knn_matches;
+                // if (matIsEqual(desc1,desc2))
+                // {
+                //     ROS_DEBUG("equall");
+
+                // }
+                // else
+                // {
+                //     ROS_DEBUG("not equall");
+                // }
+                
+                
+                // //desc1中放submap（暂时用前一帧），desc2中放当前帧
+                // matcher->knnMatch(desc1, desc2, knn_matches, 2);
+
+                // ROS_DEBUG_STREAM("knnmatches   size"<< knn_matches.size());
+
+                // // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
+                // std::vector<cv::DMatch> good_matches;
+                // for (uint j = 0; j < knn_matches.size(); ++j) {
+                //     if (!knn_matches[j].size())
+                //         continue;
+                //     if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
+                //         good_matches.push_back(knn_matches[j][0]);
+                //     }
+                // }
+                // // Convert the good key point matches to Eigen matrices
+                // Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
+                // Eigen::MatrixXd p2 = p1;
+                // // std::vector<int64_t> t1prime = t1, t2prime = t2;
+                // for (uint j = 0; j < good_matches.size(); ++j) {
+                //     p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
+                //     p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
+                //     p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
+                //     p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
+                //     // t1prime[j] = t1[good_matches[j].queryIdx];
+                //     // t2prime[j] = t2[good_matches[j].trainIdx];
+                // }
+                // // t1prime.resize(good_matches.size());
+                // // t2prime.resize(good_matches.size());
+
+                // // //这里计算一个时间差
+                // // // std::vector<std::string> parts;
+                // // // boost::split(parts, radar_files[i], boost::is_any_of("."));
+                // // // int64 time1 = std::stoll(parts[0]);
+                // // // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
+                // // // int64 time2 = std::stoll(parts[0]);
+                // // // double delta_t = (time2 - time1) / 1000000.0;
+
+                // // // v1: Compute the transformation using RANSAC
+                // // // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
+                // Ransac ransac(p2, p1, 0.35, 0.9, 100); //实在太累 直接赋值吧
+
+                // srand(1); //随机种子 应该要给个不会重复的数字 之后再弄 TODO:
+                // ransac.computeModel();
+                // Eigen::MatrixXd T;  // T_1_2
+                // ransac.getTransform(T);
+
+                // ICP Settings
+                static pcl::IterativeClosestPoint<PointType, PointType> icp;
+                icp.setMaxCorrespondenceDistance(historyKeyframeSearchRadius*2);//我们这里不是回环检测，所以不需要设置这么大 但是可能需要调试才能知道结果 TODO:
+                icp.setMaximumIterations(20); //for 回环检测为100  在我们匹配步 设置为20吧
+                icp.setTransformationEpsilon(1e-6);
+                icp.setEuclideanFitnessEpsilon(1e-6);
+                icp.setRANSACIterations(1); //可能需要打开ransac
+
+                // Align clouds   注意这里到底哪个放在Source 哪个放在Target
+                //看下面发布时的写法，是把cureCloud 用icp结果进行变换 所以应该是对的
+                icp.setInputSource(cureKeyframeCloud);
+                icp.setInputTarget(prevKeyframeCloud);
+                pcl::PointCloud<PointType>::Ptr unused_result(new pcl::PointCloud<PointType>());
+                icp.align(*unused_result);
+
+                if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore)
+                {
+                    ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged or historyFitnessScore is too big");
+                    ROS_DEBUG_STREAM("[mapOptimization]scan2MapOptimization :: historyFitnessScore  ="<<historyKeyframeFitnessScore 
+                    <<" icp_fitnessScore = "<< icp.getFitnessScore());
+
+                    ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp was not converged so we straightly do the transformUpdate using the init guess");
+                    //现在ICP总是不收敛 那我们选择先直接做后面的那一步 相当于直接用初始猜测 而完全与lidar odo无关
+                    // 所以我们注释掉return
+                    // return;
+                }
+
+                // publish corrected cloud
+                // if (pubIcpKeyFrames.getNumSubscribers() != 0)
+                // {
+                //     pcl::PointCloud<PointType>::Ptr closed_cloud(new pcl::PointCloud<PointType>());
+                //     pcl::transformPointCloud(*cureKeyframeCloud, *closed_cloud, icp.getFinalTransformation());
+                //     publishCloud(&pubIcpKeyFrames, closed_cloud, timeLaserInfoStamp, odometryFrame);
+                // }
+
+                // Get pose transformation
+                float x, y, z, roll, pitch, yaw;
+                Eigen::Affine3f correctionLidarFrame;
+                //这里拿到icp最终的结果
+                correctionLidarFrame = icp.getFinalTransformation();
+                // transform from world origin to wrong pose
+                //首先，我们拿到做icp之前的当前帧到世界坐标的变换：
+                Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
+                // transform from world origin to corrected pose
+                //然后我们获得icp修正之后的结果
+                Eigen::Affine3f tAfter = correctionLidarFrame * tBefore;
+                //从中获得欧拉角和变换等
+                pcl::getTranslationAndEulerAngles (tAfter, x, y, z, roll, pitch, yaw);
+                //然后在变换回trans，用于下面的transformUpdate
+                transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
+                transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
+
+                ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp ends");
+                ROS_DEBUG_STREAM("icp results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+                <<" z = "<<transformTobeMapped[5]);
+                ROS_DEBUG_STREAM("icp results: ORIENT roll = "<<transformTobeMapped[0]<< " pitch = " <<transformTobeMapped[1]
+                <<" yaw = "<<transformTobeMapped[2]);
             // }
+            // else if (frontEndMethodFlag==1)  //使用orb特征提取
+            // {
+                
 
-            // Get pose transformation
-            float x, y, z, roll, pitch, yaw;
-            Eigen::Affine3f correctionLidarFrame;
-            //这里拿到icp最终的结果
-            correctionLidarFrame = icp.getFinalTransformation();
-            // transform from world origin to wrong pose
-            //首先，我们拿到做icp之前的当前帧到世界坐标的变换：
-            Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
-            // transform from world origin to corrected pose
-            //然后我们获得icp修正之后的结果
-            Eigen::Affine3f tAfter = correctionLidarFrame * tBefore;
-            //从中获得欧拉角和变换等
-            pcl::getTranslationAndEulerAngles (tAfter, x, y, z, roll, pitch, yaw);
-            //然后在变换回trans，用于下面的transformUpdate
-            transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
-            transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
-
-            ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp ends");
-
-            //icp end
-
-            // //我们来看一下 ICP的结果和现在的特征结果
-            // ROS_DEBUG_STREAM("icp results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
-            // <<" z = "<<transformTobeMapped[5]);
-
-            // Eigen::Affine3f tempAffinedfromMatrix;
-            // tempAffinedfromMatrix.matrix() = T.cast<float>();
-            // Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
-            // pcl::getTranslationAndEulerAngles (tAfter_orb, x, y, z, roll, pitch, yaw);
-            // ROS_DEBUG_STREAM("orb results: TRANS x = "<< x << " y = " << y
-            // <<" z = "<<z);
+                // // Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
+                // // float x, y, z, roll, pitch, yaw;
+                // Eigen::Affine3f tempAffinedfromMatrix;
+                // Eigen::Matrix4f T_pro;
+                // T_pro(0,0) = T(0,0);T_pro(0,1) = T(0,1);T_pro(0,2) = 0;T_pro(0,3) = T(0,2);
+                // T_pro(1,0) = T(1,0);T_pro(1,1) = T(1,1);T_pro(1,2) = 0;T_pro(1,3) = T(1,2);
+                // T_pro(2,0) = T(2,0);T_pro(2,1) = T(2,1);T_pro(2,2) = 0;T_pro(2,3) = 0;
+                // T_pro(3,0) = 0;T_pro(3,1) = 0;T_pro(3,2) = 0;T_pro(3,3) = 1;
+                // tempAffinedfromMatrix.matrix() = T_pro;
+                // Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
+                // pcl::getTranslationAndEulerAngles (tAfter_orb, x, y, z, roll, pitch, yaw);
+                // if (!isnan(x))
+                // {
+                //     transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
+                //     transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
+                //     ROS_DEBUG_STREAM("orb results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+                //     <<" z = "<<transformTobeMapped[5]);
+                //     ROS_DEBUG_STREAM("orb results: ORIENT roll = "<<transformTobeMapped[0]<< " pitch = " <<transformTobeMapped[1]
+                //     <<" yaw = "<<transformTobeMapped[2]);
+                // }
+            // }
 
             transformUpdate();
 

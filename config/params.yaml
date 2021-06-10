@@ -1,5 +1,6 @@
 radar_sam:
-
+  # our params
+  frontEndMethodFlag: 1 # 1 for orb feature dectection  2 for icp
   # Topics
   pointCloudTopic: "radar_points2"               # Point cloud data
   imuTopic: "imu"                         # IMU data
@@ -24,7 +25,7 @@ radar_sam:
 
   # Sensor Settings
   sensor: velodyne                            # lidar sensor type, either 'velodyne' or 'ouster'
-  N_ROW: 32                                  # 360 
+  N_ROW: 800                                  # 360 
   Radar_target_number: 2000  
   N_COLUMN: 800                          # 1000
   rangeResolution : 0.25

@@ -71,6 +71,9 @@ public:
 
     std::string robot_id;
 
+    // our params:;
+    int frontEndMethodFlag;
+
     //Topics
     string pointCloudTopic;
     string imuTopic;
@@ -196,6 +199,9 @@ public:
                 "Invalid sensor type (must be either 'velodyne' or 'ouster'): " << sensorStr);
             ros::shutdown();
         }
+
+        nh.param<int>("radar_sam/frontEndMethodFlag", frontEndMethodFlag, 2);
+
 
         nh.param<int>("radar_sam/N_ROW", N_ROW, 16);
         nh.param<int>("radar_sam/Radar_target_numbert",Radar_target_number, 2000);
