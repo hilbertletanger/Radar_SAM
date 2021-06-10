@@ -115,10 +115,12 @@ public:
         // cloudInfo.startRingIndex.assign(N_ROW, 0);
         // cloudInfo.endRingIndex.assign(N_ROW, 0);
 
-        // cloudInfo.pointColInd.assign(N_ROW*N_COLUMN, 0);
-        // cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
+        cloudInfo.pointColInd.assign(N_ROW*N_COLUMN, 0);
+        cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
 
         resetParameters();
+        cout<<"[DEBUG]91" <<endl;
+
     }
 
     void resetParameters()
@@ -139,6 +141,8 @@ public:
             imuRotY[i] = 0;
             imuRotZ[i] = 0;
         }
+        cout<<"[DEBUG]9" <<endl;
+
     }
 
     ~ImageProjection(){}
@@ -179,17 +183,24 @@ public:
         cout<<"[DEBUG]ImageProjection cloudHandler : into" <<endl;
         if (!cachePointCloud(laserCloudMsg))
             return;
+        cout<<"[DEBUG]1" <<endl;
 
         if (!deskewInfo())
             return;
+        cout<<"[DEBUG]2" <<endl;
 
         projectPointCloud();
+        cout<<"[DEBUG]3" <<endl;
         
         cloudExtraction();
+        cout<<"[DEBUG]4" <<endl;
         
         publishClouds();
+        cout<<"[DEBUG]5" <<endl;
         
         resetParameters();
+        cout<<"[DEBUG]6" <<endl;
+
     }
 
     bool cachePointCloud(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg)
@@ -532,6 +543,8 @@ public:
     //现在，我们选择不做投影，因为匹配不在这里，所以我们基本什么都不做，我们保留之前试图投影radar时的代码
     //我们看到，原来的架构里，这里主要输出两个东西，一个是rangemap，一个是fullCloud，我们保留fullCloud
     {
+        cout<<"[DEBUG]11" <<endl;
+
         // int cloudSize = laserCloudIn->points.size();
         // int index =0;
         // for (int i = 0; i < cloudSize; ++i)
@@ -547,6 +560,7 @@ public:
         // }
         // 上面是 如果不进行投影的话  把上面打开 而把下面全部关闭
 
+        cout<<"[DEBUG]12" <<endl;
 
         // 重新进行radar投影 目的是投影 x行（一行代表一个角度）y列 （一列代表一个距离），每个位置的值是平均高度（或者数量）
         //下面是试图radar投影的代码
@@ -560,6 +574,12 @@ public:
             thisPoint.y = laserCloudIn->points[i].y;
             thisPoint.z = laserCloudIn->points[i].z;
             // thisPoint.intensity = laserCloudIn->points[i].intensity;
+
+            //可以考虑用这里来写index就像liosam里一样，但是不知道有什么意义，暂时不做 TODO:
+            // int index = columnIdn + rowIdn * N_COLUMN;
+            //一度把这个放在最后，结果因为rangeMap的提前退出机制 使得index不对 太傻了
+            fullCloud->points[index] = thisPoint;
+            index++;
 
             // //投影ver1 投影 x行（一行代表一个角度）y列 （一列代表一个距离），每个位置的值是平均高度（或者数量）
             // // rowIdn计算  
@@ -620,10 +640,6 @@ public:
             //原版Newman是用power这种量 我们暂时使用平均高度
             rangeMat.at<float>(rowIdn, columnIdn) = thisPoint.z;
             
-            //可以考虑用这里来写index就像liosam里一样，但是不知道有什么意义，暂时不做 TODO:
-            // int index = columnIdn + rowIdn * N_COLUMN;
-            fullCloud->points[index] = thisPoint;
-            index++;
         }
     }
 
@@ -635,6 +651,8 @@ public:
     {
         int count = 0;
         int cloudSize = laserCloudIn->points.size();
+        cout<<"[DEBUG]13" <<endl;
+
         // extract segmented cloud for lidar odometry
         for (int i = 0; i < cloudSize; ++i)
         {
@@ -643,6 +661,7 @@ public:
             // size of extracted cloud
             ++count;
         }
+        cout<<"[DEBUG]14" <<endl;
 
         // int count = 0;
         // // extract segmented cloud for lidar odometry
@@ -671,11 +690,17 @@ public:
     //发布cloudinfo
     void publishClouds()
     {
-        cloudInfo.header = cloudHeader;
+        cloudInfo.header = cloudHeader;        
+        cout<<"[DEBUG]15" <<endl;
+
         sensor_msgs::Image msg = *(cv_bridge::CvImage(std_msgs::Header(), "bgr8", rangeMat).toImageMsg());
         cloudInfo.rangeMap = msg;
         cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame); 
+        cout<<"[DEBUG]17" <<endl;
+
         pubLaserCloudInfo.publish(cloudInfo);
+        cout<<"[DEBUG]16" <<endl;
+
 
     }
 };
