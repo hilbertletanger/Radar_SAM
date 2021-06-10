@@ -203,9 +203,9 @@ public:
         nh.param<int>("radar_sam/frontEndMethodFlag", frontEndMethodFlag, 2);
 
 
-        nh.param<int>("radar_sam/N_ROW", N_ROW, 16);
+        nh.param<int>("radar_sam/N_ROW", N_ROW, 800);
         nh.param<int>("radar_sam/Radar_target_numbert",Radar_target_number, 2000);
-        nh.param<int>("radar_sam/N_COLUMN", N_COLUMN, 1800);
+        nh.param<int>("radar_sam/N_COLUMN", N_COLUMN, 800);
         nh.param<float>("radar_sam/rangeResolution", rangeResolution, 0.25);
         nh.param<int>("radar_sam/downsampleRate", downsampleRate, 1);
         nh.param<float>("radar_sam/radarMinRange", radarMinRange, 1.0);

@@ -7,8 +7,8 @@ set(CMAKE_BUILD_TYPE "Release")
 set(CMAKE_CXX_STANDARD 14)
 # set(CMAKE_CXX_FLAGS "-std=c++11") //default
 
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -pthread")
-# set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
+#set(CMAKE_CXX_FLAGS_RELEASE "-O3 -g -pthread")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3 -Wall -g -pthread")
 
 
 find_package(catkin REQUIRED COMPONENTS
