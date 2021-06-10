@@ -124,6 +124,7 @@ public:
     pcl::PointCloud<PointType>::Ptr laserCloudRaw; // giseop
     pcl::PointCloud<PointType>::Ptr laserCloudRawDS; // giseop
     double laserCloudRawTime;
+    double lastLaserCloudRawTime;
 
     // pcl::PointCloud<PointType>::Ptr laserCloudCornerLast; // corner feature set from odoOptimization
     // pcl::PointCloud<PointType>::Ptr laserCloudSurfLast; // surf feature set from odoOptimization
@@ -1858,74 +1859,88 @@ public:
                 //从这里开始使用Newman方法匹配
 
                 //先提orb特征
-                // detector->detect(img2, kp2);
-                // ROS_DEBUG_STREAM("kp2   size"<< kp2.size());
-                // ROS_DEBUG_STREAM("imag2   size"<< img2.size());
+                detector->detect(img2, kp2);
+                ROS_DEBUG_STREAM("kp2   size"<< kp2.size());
+                ROS_DEBUG_STREAM("imag2   size"<< img2.size());
 
 
-                // detector->compute(img2, kp2, desc2);
-                // convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
-                // // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
+                detector->compute(img2, kp2, desc2);
+                convert_from_bev(kp2, rangeResolution, N_ROW, cart_targets2); //这里假设N_ROW = N_COLUMN 后期我们可以自己改这个函数
+                // getTimes(cart_targets2, azimuths, times, t2); //先看后面getTimes拿来干嘛
 
 
-                // //  Match keypoint descriptors
-                // std::vector<std::vector<cv::DMatch>> knn_matches;
-                // if (matIsEqual(desc1,desc2))
-                // {
-                //     ROS_DEBUG("equall");
+                //  Match keypoint descriptors
+                std::vector<std::vector<cv::DMatch>> knn_matches;
+                if (matIsEqual(desc1,desc2))
+                {
+                    ROS_DEBUG("equall");
 
-                // }
-                // else
-                // {
-                //     ROS_DEBUG("not equall");
-                // }
+                }
+                else
+                {
+                    ROS_DEBUG("not equall");
+                }
                 
                 
-                // //desc1中放submap（暂时用前一帧），desc2中放当前帧
-                // matcher->knnMatch(desc1, desc2, knn_matches, 2);
+                //desc1中放submap（暂时用前一帧），desc2中放当前帧
+                matcher->knnMatch(desc1, desc2, knn_matches, 2);
 
-                // ROS_DEBUG_STREAM("knnmatches   size"<< knn_matches.size());
+                ROS_DEBUG_STREAM("knnmatches   size"<< knn_matches.size());
 
-                // // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
-                // std::vector<cv::DMatch> good_matches;
-                // for (uint j = 0; j < knn_matches.size(); ++j) {
-                //     if (!knn_matches[j].size())
-                //         continue;
-                //     if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
-                //         good_matches.push_back(knn_matches[j][0]);
-                //     }
-                // }
-                // // Convert the good key point matches to Eigen matrices
-                // Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
-                // Eigen::MatrixXd p2 = p1;
-                // // std::vector<int64_t> t1prime = t1, t2prime = t2;
-                // for (uint j = 0; j < good_matches.size(); ++j) {
-                //     p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
-                //     p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
-                //     p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
-                //     p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
-                //     // t1prime[j] = t1[good_matches[j].queryIdx];
-                //     // t2prime[j] = t2[good_matches[j].trainIdx];
-                // }
-                // // t1prime.resize(good_matches.size());
-                // // t2prime.resize(good_matches.size());
+                // Filter matches using nearest neighbor distance ratio (Lowe, Szeliski)
+                std::vector<cv::DMatch> good_matches;
+                for (uint j = 0; j < knn_matches.size(); ++j) {
+                    if (!knn_matches[j].size())
+                        continue;
+                    if (knn_matches[j][0].distance < 0.8 * knn_matches[j][1].distance) {  // 有个0.8的参数还没有参数化 之后写TODO:
+                        good_matches.push_back(knn_matches[j][0]);
+                    }
+                }
+                // Convert the good key point matches to Eigen matrices
+                Eigen::MatrixXd p1 = Eigen::MatrixXd::Zero(2, good_matches.size());
+                Eigen::MatrixXd p2 = p1;
+                std::vector<int64_t> t1prime = t1, t2prime = t2;
+                for (uint j = 0; j < good_matches.size(); ++j) {
+                    p1(0, j) = cart_targets1(0, good_matches[j].queryIdx);
+                    p1(1, j) = cart_targets1(1, good_matches[j].queryIdx);
+                    p2(0, j) = cart_targets2(0, good_matches[j].trainIdx);
+                    p2(1, j) = cart_targets2(1, good_matches[j].trainIdx);
+                    t1prime[j] = t1[good_matches[j].queryIdx];
+                    t2prime[j] = t2[good_matches[j].trainIdx];
+                }
+                t1prime.resize(good_matches.size());
+                t2prime.resize(good_matches.size());
 
-                // // //这里计算一个时间差
-                // // // std::vector<std::string> parts;
-                // // // boost::split(parts, radar_files[i], boost::is_any_of("."));
-                // // // int64 time1 = std::stoll(parts[0]);
-                // // // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
-                // // // int64 time2 = std::stoll(parts[0]);
-                // // // double delta_t = (time2 - time1) / 1000000.0;
+                // //这里计算一个时间差
+                // // std::vector<std::string> parts;
+                // // boost::split(parts, radar_files[i], boost::is_any_of("."));
+                // // int64 time1 = std::stoll(parts[0]);
+                // // boost::split(parts, radar_files[i + 1], boost::is_any_of("."));
+                // // int64 time2 = std::stoll(parts[0]);
+                // // double delta_t = (time2 - time1) / 1000000.0;
 
-                // // // v1: Compute the transformation using RANSAC
-                // // // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
+                // // v1: Compute the transformation using RANSAC
+                // // Ransac ransac(p2, p1, ransac_threshold, inlier_ratio, max_iterations);
                 // Ransac ransac(p2, p1, 0.35, 0.9, 100); //实在太累 直接赋值吧
 
                 // srand(1); //随机种子 应该要给个不会重复的数字 之后再弄 TODO:
                 // ransac.computeModel();
                 // Eigen::MatrixXd T;  // T_1_2
                 // ransac.getTransform(T);
+
+                 // v2: Compute the transformation using motion-distorted RANSAC
+                // MotionDistortedRansac mdransac(p2, p1, t2prime, t1prime, md_threshold, inlier_ratio, max_iterations);
+                MotionDistortedRansac mdransac(p2, p1, t2prime, t1prime, pow(0.35, 2), 0.9 ,100);
+                // mdransac.setMaxGNIterations(max_gn_iterations);
+                mdransac.setMaxGNIterations(10);
+                mdransac.correctForDoppler(false);
+                srand(1);
+                mdransac.computeModel();
+                Eigen::MatrixXd Tmd;Eigen::MatrixXd T;  // T_1_2
+                mdransac.getTransform((laserCloudRawTime-lastLaserCloudRawTime), Tmd);
+                // T = Tmd.inverse();
+                T = Tmd;
+                lastLaserCloudRawTime = laserCloudRawTime;
 
                 // ICP Settings
                 static pcl::IterativeClosestPoint<PointType, PointType> icp;
@@ -1989,26 +2004,26 @@ public:
             // {
                 
 
-                // // Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
-                // // float x, y, z, roll, pitch, yaw;
-                // Eigen::Affine3f tempAffinedfromMatrix;
-                // Eigen::Matrix4f T_pro;
-                // T_pro(0,0) = T(0,0);T_pro(0,1) = T(0,1);T_pro(0,2) = 0;T_pro(0,3) = T(0,2);
-                // T_pro(1,0) = T(1,0);T_pro(1,1) = T(1,1);T_pro(1,2) = 0;T_pro(1,3) = T(1,2);
-                // T_pro(2,0) = T(2,0);T_pro(2,1) = T(2,1);T_pro(2,2) = 0;T_pro(2,3) = 0;
-                // T_pro(3,0) = 0;T_pro(3,1) = 0;T_pro(3,2) = 0;T_pro(3,3) = 1;
-                // tempAffinedfromMatrix.matrix() = T_pro;
-                // Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
-                // pcl::getTranslationAndEulerAngles (tAfter_orb, x, y, z, roll, pitch, yaw);
-                // if (!isnan(x))
-                // {
-                //     transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
-                //     transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
-                //     ROS_DEBUG_STREAM("orb results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
-                //     <<" z = "<<transformTobeMapped[5]);
-                //     ROS_DEBUG_STREAM("orb results: ORIENT roll = "<<transformTobeMapped[0]<< " pitch = " <<transformTobeMapped[1]
-                //     <<" yaw = "<<transformTobeMapped[2]);
-                // }
+                // Eigen::Affine3f tBefore = trans2Affine3f(transformTobeMapped);
+                float x_orb, y_orb, z_orb, roll_orb, pitch_orb, yaw_orb;
+                Eigen::Affine3f tempAffinedfromMatrix;
+                Eigen::Matrix4f T_pro;
+                T_pro(0,0) = T(0,0);T_pro(0,1) = T(0,1);T_pro(0,2) = 0;T_pro(0,3) = T(0,2);
+                T_pro(1,0) = T(1,0);T_pro(1,1) = T(1,1);T_pro(1,2) = 0;T_pro(1,3) = T(1,2);
+                T_pro(2,0) = T(2,0);T_pro(2,1) = T(2,1);T_pro(2,2) = 0;T_pro(2,3) = 0;
+                T_pro(3,0) = 0;T_pro(3,1) = 0;T_pro(3,2) = 0;T_pro(3,3) = 1;
+                tempAffinedfromMatrix.matrix() = T_pro;
+                Eigen::Affine3f tAfter_orb = tempAffinedfromMatrix * tBefore;
+                pcl::getTranslationAndEulerAngles (tAfter_orb, x_orb, y_orb, z_orb, roll_orb, pitch_orb, yaw_orb);
+                if (!isnan(x_orb))
+                {
+                    transformTobeMapped[0]=roll_orb; transformTobeMapped[1] =pitch_orb; transformTobeMapped[2] = yaw_orb;
+                    transformTobeMapped[3]=x_orb;transformTobeMapped[4]=y_orb;transformTobeMapped[5]=z_orb;
+                    ROS_DEBUG_STREAM("orb results: TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
+                    <<" z = "<<transformTobeMapped[5]);
+                    ROS_DEBUG_STREAM("orb results: ORIENT roll = "<<transformTobeMapped[0]<< " pitch = " <<transformTobeMapped[1]
+                    <<" yaw = "<<transformTobeMapped[2]);
+                }
             // }
 
             transformUpdate();
