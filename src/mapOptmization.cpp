@@ -403,19 +403,15 @@ public:
             downsampleCurrentScan();
 
             //匹配  这里改成ICP
-            ROS_DEBUG("Before scan2MapOptimization");
             ROS_DEBUG_STREAM("Before scan2MapOptimization TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
             <<" z = "<<transformTobeMapped[5]);
 
 
             scan2MapOptimization();
-
-            ROS_DEBUG("After scan2MapOptimization");
             ROS_DEBUG_STREAM("After scan2MapOptimization TRANS x = "<<transformTobeMapped[3]<< " y = " <<transformTobeMapped[4]
             <<" z = "<<transformTobeMapped[5]);
 
             //优化 就是SAM的部分
-            ROS_DEBUG("Before saveKeyFramesAndFactor");
 
             // memcpy(transformTobeMapped,transInitSave,len*sizeof(float));  
 
@@ -426,11 +422,11 @@ public:
             //如果aLoopIsClosed为true(比如加入了gps因子或者loop因子) 那么不仅得往位姿队列里加新位姿，还得更新整个位姿队列的值
             correctPoses();
 
-            ROS_DEBUG("Before publishOdometry");
+            // ROS_DEBUG("Before publishOdometry");
 
             publishOdometry();
 
-            ROS_DEBUG("Before publishFrames()");
+            // ROS_DEBUG("Before publishFrames()");
 
             publishFrames();
         }
@@ -708,10 +704,10 @@ public:
         }
 
         // extract visualized and downsampled key frames
-        for (int i = 0; i < (int)globalMapKeyPosesDS->size(); ++i){
-            if (pointDistance(globalMapKeyPosesDS->points[i], cloudKeyPoses3D->back()) > globalMapVisualizationSearchRadius)
-                continue;
-            int thisKeyInd = (int)globalMapKeyPosesDS->points[i].intensity;
+        for (int i = 0; i < (int)globalMapKeyPoses->size(); ++i){
+            // if (pointDistance(globalMapKeyPosesDS->points[i], cloudKeyPoses3D->back()) > globalMapVisualizationSearchRadius)
+            //     continue;
+            int thisKeyInd = (int)globalMapKeyPoses->points[i].intensity;
             // *globalMapKeyFrames += *transformPointCloud(cornerCloudKeyFrames[thisKeyInd],  &cloudKeyPoses6D->points[thisKeyInd]);
             // *globalMapKeyFrames += *transformPointCloud(surfCloudKeyFrames[thisKeyInd],    &cloudKeyPoses6D->points[thisKeyInd]);
             *globalMapKeyFrames += *transformPointCloud(allCloudKeyFrames[thisKeyInd],    &cloudKeyPoses6D->points[thisKeyInd]);
@@ -722,7 +718,10 @@ public:
         downSizeFilterGlobalMapKeyFrames.setLeafSize(globalMapVisualizationLeafSize, globalMapVisualizationLeafSize, globalMapVisualizationLeafSize); // for global map visualization
         downSizeFilterGlobalMapKeyFrames.setInputCloud(globalMapKeyFrames);
         downSizeFilterGlobalMapKeyFrames.filter(*globalMapKeyFramesDS);
-        publishCloud(&pubLaserCloudSurround, globalMapKeyFramesDS, timeLaserInfoStamp, odometryFrame);
+        
+        publishCloud(&pubLaserCloudSurround, globalMapKeyFrames, timeLaserInfoStamp, odometryFrame);
+
+        
     }
 
 
@@ -825,7 +824,7 @@ public:
 
         if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore) {
             std::cout << "ICP fitness test failed (" << icp.getFitnessScore() << " > " << historyKeyframeFitnessScore << "). Reject this RS loop." << std::endl;
-            return;
+            return;//TODO:关闭
         } else {
             std::cout << "ICP fitness test passed (" << icp.getFitnessScore() << " < " << historyKeyframeFitnessScore << "). Add this RS loop." << std::endl;
         }
@@ -885,19 +884,25 @@ public:
         // extract cloud
         pcl::PointCloud<PointType>::Ptr cureKeyframeCloud(new pcl::PointCloud<PointType>());
         pcl::PointCloud<PointType>::Ptr prevKeyframeCloud(new pcl::PointCloud<PointType>());
+
         {
             // loopFindNearKeyframesWithRespectTo(cureKeyframeCloud, loopKeyCur, 0, loopKeyPre); // giseop 
             // loopFindNearKeyframes(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum);
 
             int base_key = 0;
             loopFindNearKeyframesWithRespectTo(cureKeyframeCloud, loopKeyCur, 0, base_key); // giseop 
+
             loopFindNearKeyframesWithRespectTo(prevKeyframeCloud, loopKeyPre, historyKeyframeSearchNum, base_key); // giseop 
 
-            if (cureKeyframeCloud->size() < 300 || prevKeyframeCloud->size() < 1000)
-                return;
+            //我们可能也需要size判断 但不是这两个数
+            // if (cureKeyframeCloud->size() < 300 || prevKeyframeCloud->size() < 1000)
+            //     return;
+
             if (pubHistoryKeyFrames.getNumSubscribers() != 0)
                 publishCloud(&pubHistoryKeyFrames, prevKeyframeCloud, timeLaserInfoStamp, odometryFrame);
+
         }
+        
 
         // ICP Settings
         static pcl::IterativeClosestPoint<PointType, PointType> icp;
@@ -916,8 +921,8 @@ public:
         // TODO icp align with initial 
 
         if (icp.hasConverged() == false || icp.getFitnessScore() > historyKeyframeFitnessScore) {
-            std::cout << "ICP fitness test failed (" << icp.getFitnessScore() << " > " << historyKeyframeFitnessScore << "). Reject this SC loop." << std::endl;
-            return;
+            std::cout << "ICP fitness test failed (" << icp.getFitnessScore() << " > " << historyKeyframeFitnessScore << "). Reject this SC loop. but we add" << std::endl;
+            // return;TODO:
         } else {
             std::cout << "ICP fitness test passed (" << icp.getFitnessScore() << " < " << historyKeyframeFitnessScore << "). Add this SC loop." << std::endl;
         }
@@ -1104,8 +1109,8 @@ public:
             int keyNear = key + i;
             if (keyNear < 0 || keyNear >= cloudSize )
                 continue;
-            *nearKeyframes += *transformPointCloud(cornerCloudKeyFrames[keyNear], &copy_cloudKeyPoses6D->points[_wrt_key]);
-            *nearKeyframes += *transformPointCloud(surfCloudKeyFrames[keyNear],   &copy_cloudKeyPoses6D->points[_wrt_key]);
+            *nearKeyframes += *transformPointCloud(allCloudKeyFrames[keyNear], &copy_cloudKeyPoses6D->points[_wrt_key]);
+            // *nearKeyframes += *transformPointCloud(surfCloudKeyFrames[keyNear],   &copy_cloudKeyPoses6D->points[_wrt_key]);
         }
 
         if (nearKeyframes->empty())
@@ -1743,13 +1748,9 @@ public:
         if (cloudKeyPoses3D->points.empty())
             return;
 
-        ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp judge before");
-
         // if (laserCloudCornerLastDSNum > edgeFeatureMinValidNum && laserCloudSurfLastDSNum > surfFeatureMinValidNum)
         if (laserCloudAllLastDSNum > 100) // 原来是 线特征多于10个 平面特征多于100个 我们的话 直接大于100吧
         {
-
-            ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp in");
 
             // kdtreeCornerFromMap->setInputCloud(laserCloudCornerFromMapDS);
             // kdtreeSurfFromMap->setInputCloud(laserCloudSurfFromMapDS);
@@ -1851,8 +1852,6 @@ public:
             //然后在变换回trans，用于下面的transformUpdate
             transformTobeMapped[0]=roll; transformTobeMapped[1] =pitch; transformTobeMapped[2] = yaw;
             transformTobeMapped[3]=x;transformTobeMapped[4]=y;transformTobeMapped[5]=z;
-
-            ROS_DEBUG("[mapOptimization]scan2MapOptimization :: icp ends");
 
             //icp end
 
@@ -2322,7 +2321,7 @@ public:
         // publish key poses
         publishCloud(&pubKeyPoses, cloudKeyPoses3D, timeLaserInfoStamp, odometryFrame);
         // Publish surrounding key frames
-        publishCloud(&pubRecentKeyFrames, laserCloudSurfFromMapDS, timeLaserInfoStamp, odometryFrame);
+        publishCloud(&pubRecentKeyFrames, laserCloudAllFromMapDS, timeLaserInfoStamp, odometryFrame);
         // publish registered key frame
         if (pubRecentKeyFrame.getNumSubscribers() != 0)
         {

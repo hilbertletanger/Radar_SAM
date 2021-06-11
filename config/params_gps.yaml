@@ -15,8 +15,8 @@ radar_sam:
   # GPS Settings
   useImuHeadingInitialization: true           # if using GPS data, set to "true"
   useGpsElevation: false                      # if GPS elevation is bad, set to "false"
-  gpsCovThreshold: 20.0            #default 2.0            # m^2, threshold for using GPS data
-  poseCovThreshold: 1.0           #default 25.0           # m^2, threshold for using GPS data
+  gpsCovThreshold: 20.0            #default 2.0            # m^2, threshold for using GPS data 这个值越小，就越不适用gps来修正
+  poseCovThreshold: 1.0           #default 25.0           # m^2, threshold for using GPS data 这个值越大，就越不使用gps来修正
   
   # Export settings
   savePCD: false                              # https://github.com/TixiaoShan/LIO-SAM/issues/3

@@ -542,7 +542,7 @@ int main(int argc, char** argv)
 {
     ros::init(argc, argv, "roboat_loam");
     
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
+    // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
     //先是imu预积分
     IMUPreintegration ImuP;
 

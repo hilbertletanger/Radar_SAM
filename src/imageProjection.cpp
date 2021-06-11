@@ -176,7 +176,7 @@ public:
 
     void cloudHandler(const sensor_msgs::PointCloud2ConstPtr& laserCloudMsg) //TODO:
     {
-        cout<<"[DEBUG]ImageProjection cloudHandler : into" <<endl;
+        // cout<<"[DEBUG]ImageProjection cloudHandler : into" <<endl;
         if (!cachePointCloud(laserCloudMsg))
             return;
 
@@ -651,7 +651,7 @@ int main(int argc, char** argv)
     ros::init(argc, argv, "radar_sam");
 
     //打开DEBUG调试信息
-    ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
+    // ros::console::set_logger_level(ROSCONSOLE_DEFAULT_NAME,ros::console::levels::Debug);
 
     ImageProjection IP;
     
