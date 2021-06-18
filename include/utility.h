@@ -59,7 +59,7 @@ typedef std::numeric_limits< double > dbl;
 
 typedef pcl::PointXYZI PointType;
 
-enum class SensorType { VELODYNE, OUSTER };
+enum class SensorType {GPAL4D};
 
 class ParamServer
 {
@@ -177,18 +177,18 @@ public:
 
         std::string sensorStr;
         nh.param<std::string>("radar_sam/sensor", sensorStr, "");
-        if (sensorStr == "velodyne")
+        if (sensorStr == "gpal4d")
         {
-            sensor = SensorType::VELODYNE;
+            sensor = SensorType::GPAL4D;
         }
-        else if (sensorStr == "ouster")
-        {
-            sensor = SensorType::OUSTER;
-        }
+        // else if (sensorStr == "ouster")
+        // {
+        //     sensor = SensorType::OUSTER;
+        // }
         else
         {
             ROS_ERROR_STREAM(
-                "Invalid sensor type (must be either 'velodyne' or 'ouster'): " << sensorStr);
+                "Invalid sensor type (must be either 'gpal4d' or '...'): " << sensorStr);
             ros::shutdown();
         }
 

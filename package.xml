@@ -2,13 +2,9 @@
 <package>
   <name>radar_sam</name>
   <version>1.0.0</version>
-  <description>Lidar Odometry</description>
-
-  <maintainer email="shant@mit.edu">Tixiao Shan</maintainer>
-
+  <description>radar Odometry</description>
   <license>TODO</license>
-
-  <author>Tixiao Shan</author>
+  <maintainer email="shant@mit.edu">Tixiao Shan</maintainer>
 
   <buildtool_depend>catkin</buildtool_depend>
 
