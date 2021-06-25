@@ -25,9 +25,9 @@ radar_sam:
 
   # Sensor Settings
   sensor: velodyne                            # lidar sensor type, either 'velodyne' or 'ouster'
-  N_ROW: 800                                  # 360 
+  N_ROW: 400                                  # 360 
   Radar_target_number: 2000  
-  N_COLUMN: 800                          # 1000
+  N_COLUMN: 400                          # 1000
   rangeResolution : 0.25
   downsampleRate: 1                           # default: 1. Downsample your data if too many points. i.e., 16 = 64 / 4, 16 = 16 / 1
   radarMinRange: 1.0                          # default: 1.0, minimum lidar range to be used

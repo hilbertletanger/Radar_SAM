@@ -29,52 +29,19 @@ class mapProjection : public ParamServer
 {
 private:
 
-    std::mutex imuLock;
-    std::mutex odoLock;
-
     ros::Subscriber subMap;
-    ros::Publisher  pubLaserCloud;
     
     ros::Publisher pubGridmap;
-    ros::Publisher pubLaserCloudInfo;
-
-    ros::Subscriber subImu;
-    std::deque<sensor_msgs::Imu> imuQueue;
-
-    ros::Subscriber subOdom;
-    std::deque<nav_msgs::Odometry> odomQueue;
 
     std::deque<sensor_msgs::PointCloud2> cloudQueue;
     sensor_msgs::PointCloud2 currentCloudMsg;
 
-    double *imuTime = new double[queueLength];
-    double *imuRotX = new double[queueLength];
-    double *imuRotY = new double[queueLength];
-    double *imuRotZ = new double[queueLength];
-
-    int imuPointerCur;  // imu队列的当前位置指针
-    bool firstPointFlag; // firstPointFlag 还不知道什么意思
-    Eigen::Affine3f transStartInverse;  //一个变换，不知道什么意思
-
-    // pcl::PointCloud<PointXYZIRT>::Ptr laserCloudIn;
     pcl::PointCloud<PointType>::Ptr laserCloudIn;  //点云输入
 
-    // pcl::PointCloud<OusterPointXYZIRT>::Ptr tmpOusterCloudIn;
     pcl::PointCloud<PointType>::Ptr   fullCloud;   //全点云 不知道什么意思
     pcl::PointCloud<PointType>::Ptr   extractedCloud;  //提取的点云 不知道什么意思
 
-    int deskewFlag;    //去畸变的flag
-    cv::Mat rangeMat;  //深度图 最终我们是不用这个的 我们或许会使用gridmap
-    //TODO: 一个gridmap的结构体
-    //为了快速先有个架构，我们先用icp，那么就不需要gridmap，而需要的只是pcl的pointcloud
-    //所以
-    pcl::PointCloud<PointType>::Ptr CloudForICP;
-    
-    bool odomDeskewFlag;   //odom去畸变flag
-    float odomIncreX;
-    float odomIncreY;
-    float odomIncreZ;
-
+    cv::Mat rangeMat;  
     radar_sam::cloud_info cloudInfo;
     double timeScanCur;  //对于激光 一帧点云有开始和结束两个时间 对于毫米波 我们只使用timeScanCur
     double timeScanEnd;  //这个之后一定不再使用
@@ -82,10 +49,11 @@ private:
 
 
 public:
-    mapProjection():
-    deskewFlag(0)
+    mapProjection()
     {
         subMap = nh.subscribe<sensor_msgs::PointCloud2>("radar_sam/mapping/map_global", 5, &mapProjection::mapHandler, this, ros::TransportHints().tcpNoDelay());
+        
+        // subMap = nh.subscribe<sensor_msgs::PointCloud2>("/radar_points2", 5, &mapProjection::mapHandler, this, ros::TransportHints().tcpNoDelay());
         //这里的回调函数应该要改//TODO:
 
         pubGridmap = nh.advertise<sensor_msgs::Image> ("radar_sam/mapping/gridmap", 1); //提取的点云，往外发，我们可能不需要这个
@@ -105,7 +73,7 @@ public:
     void resetParameters()
     {
         laserCloudIn->clear();
-        rangeMat = cv::Mat(N_ROW, N_COLUMN, CV_32F, cv::Scalar::all(FLT_MAX));
+        rangeMat = cv::Mat(N_ROW, N_COLUMN, CV_8UC1, cv::Scalar(255));
     }
 
     ~mapProjection(){}
@@ -189,10 +157,11 @@ public:
                 continue;
 
             //这里做 如果这个位置已经有值了该做什么处理（什么都不做，或者计算平均高度，或者计算数量）
-            if (rangeMat.at<float>(rowIdn, columnIdn) != FLT_MAX)
+            if (rangeMat.at<uchar>(rowIdn, columnIdn) != 255)
             {
                 //我们暂时计算平均高度
-                rangeMat.at<float>(rowIdn, columnIdn) = (thisPoint.z + rangeMat.at<float>(rowIdn, columnIdn) )/2;
+                // rangeMat.at<uchar>(rowIdn, columnIdn) = (thisPoint.z + rangeMat.at<uchar>(rowIdn, columnIdn) )/2;
+                rangeMat.at<uchar>(rowIdn, columnIdn) = conventHeight2Pixel(-2,5,(thisPoint.z + rangeMat.at<uchar>(rowIdn, columnIdn) )/2);
                 continue;
             }
             // thisPoint = deskewPoint(&thisPoint, laserCloudIn->points[i].time);//这里使用time来去畸变 实际上radar不需要
@@ -201,7 +170,7 @@ public:
             //用range的话不太合理，因为range已经被编码进列了
             //用数量的话，绝大多数情况会是二值的
             //原版Newman是用power这种量 我们暂时使用平均高度
-            rangeMat.at<float>(rowIdn, columnIdn) = thisPoint.z;
+            rangeMat.at<uchar>(rowIdn, columnIdn) = conventHeight2Pixel(-2,5,thisPoint.z);
             
         }
     }
@@ -209,11 +178,15 @@ public:
     //发布rangeMat
     void publishClouds()
     {
-        sensor_msgs::Image msg = *(cv_bridge::CvImage(std_msgs::Header(), "bgr8", rangeMat).toImageMsg());
+        sensor_msgs::Image msg = *(cv_bridge::CvImage(std_msgs::Header(), "mono8", rangeMat).toImageMsg());
         msg.header = cloudHeader;
 
         pubGridmap.publish(msg);
 
+    }
+    int conventHeight2Pixel(int heightlow , int heighthigh, float height)
+    {
+        return floor((height-heightlow)/(heighthigh-heightlow)*255);
     }
 };
 

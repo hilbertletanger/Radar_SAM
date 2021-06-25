@@ -37,7 +37,7 @@ private:
     
     ros::Publisher pubExtractedCloud;
     ros::Publisher pubLaserCloudInfo;
-    ros::Publisher pubImage;
+    // ros::Publisher pubImage;
 
     ros::Subscriber subImu;
     std::deque<sensor_msgs::Imu> imuQueue;
@@ -95,7 +95,7 @@ public:
 
         pubExtractedCloud = nh.advertise<sensor_msgs::PointCloud2> ("radar_sam/deskew/cloud_deskewed", 1); //提取的点云，往外发，我们可能不需要这个
         pubLaserCloudInfo = nh.advertise<radar_sam::cloud_info> ("radar_sam/deskew/cloud_info", 1);   //点云数据的发送
-        pubImage = nh.advertise<sensor_msgs::PointCloud2> ("radar_sam/deskew/imaggg", 1);  
+        // pubImage = nh.advertise<sensor_msgs::Image> ("radar_sam/deskew/imaggg", 1);  
 
 
         allocateMemory();
@@ -118,8 +118,8 @@ public:
         // cloudInfo.startRingIndex.assign(N_ROW, 0);
         // cloudInfo.endRingIndex.assign(N_ROW, 0);
 
-        cloudInfo.pointColInd.assign(N_ROW*N_COLUMN, 0);
-        cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
+        // cloudInfo.pointColInd.assign(N_ROW*N_COLUMN, 0);
+        // cloudInfo.pointRange.assign(N_ROW*N_COLUMN, 0);
 
         resetParameters();
         cout<<"[DEBUG]91" <<endl;
@@ -701,7 +701,7 @@ public:
         cloudInfo.cloud_deskewed  = publishCloud(&pubExtractedCloud, extractedCloud, cloudHeader.stamp, lidarFrame); 
 
         cout<<"[DEBUG]17" <<endl;
-        cloudInfo.cloud_deskewed  = publishCloud(&pubImage, extractedCloud, cloudHeader.stamp, lidarFrame); 
+        // cloudInfo.cloud_deskewed  = publishCloud(&pubImage, extractedCloud, cloudHeader.stamp, lidarFrame); 
 
         pubLaserCloudInfo.publish(cloudInfo);
         cout<<"[DEBUG]16" <<endl;
